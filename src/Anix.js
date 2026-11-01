@@ -987,6 +987,104 @@ _© ${botName(settings, config)}_
 }
 break;
 
+//==================================================//
+// 亗 SHADOW MD — LINKS
+//==================================================//
+
+case "repo":
+case "link":
+case "pair": {
+    await bot.sendMessage(m.chat, {
+        text: `╭━━〔 亗 𝐒𝐇𝐀𝐃𝐎𝐖 𝐌𝐃 亗 〕━━╮
+┃
+┃  🌐 𝐒𝐇𝐀𝐃𝐎𝐖 𝐌𝐃
+┃
+┃  🔗 PAIRING & WEBSITE
+┃
+┃  https://shadow-logs.onrender.com/
+┃
+┃  ⚡ CONNECT • PAIR • HOST
+┃
+╰━━━━━━━━━━━━━━━━━━━━╯`
+    }, { quoted: m });
+}
+break;
+
+//==================================================//
+
+ //==================================================//
+// 亗 SHADOW MD — UPDATE
+//==================================================//
+
+case "update": {
+    try {
+        const axios = require("axios");
+
+        const response = await axios.get(
+            "https://api.github.com/repos/javiel628/shadow/commits",
+            {
+                headers: { "User-Agent": "SHADOW-MD" },
+                params: { per_page: 1 }
+            }
+        );
+
+        const latestCommit = response.data[0]?.sha;
+
+        if (!latestCommit) {
+            throw new Error("No commit found");
+        }
+
+        const deployedCommit = process.env.GIT_COMMIT_SHA;
+
+        if (deployedCommit && deployedCommit === latestCommit) {
+            return await bot.sendMessage(m.chat, {
+                text: `╭━━〔 亗 𝐒𝐇𝐀𝐃𝐎𝐖 𝐌𝐃 亗 〕━━╮
+┃
+┃  <escape>✨</escape> SYSTEM STATUS
+┃
+┃  <escape>✅</escape> BOT IS UP TO DATE
+┃
+┃  No new updates available.
+┃  You're running the latest version.
+┃
+╰━━━━━━━━━━━━━━━━━━━━╯`
+            }, { quoted: m });
+        }
+
+        await bot.sendMessage(m.chat, {
+            text: `╭━━〔 亗 𝐒𝐇𝐀𝐃𝐎𝐖 𝐌𝐃 亗 〕━━╮
+┃
+┃  <escape>🚀</escape> UPDATE AVAILABLE
+┃
+┃  A newer version was found!
+┃
+┃  Latest commit:
+┃  ${latestCommit.slice(0, 8)}
+┃
+┃  <escape>⚙️</escape> Deploy the latest version
+┃  from your Render dashboard.
+┃
+╰━━━━━━━━━━━━━━━━━━━━╯`
+        }, { quoted: m });
+
+    } catch (error) {
+        await bot.sendMessage(m.chat, {
+            text: `╭━━〔 亗 𝐒𝐇𝐀𝐃𝐎𝐖 𝐌𝐃 亗 〕━━╮
+┃
+┃  <escape>❌</escape> UPDATE CHECK FAILED
+┃
+┃  Could not connect to GitHub.
+┃  Please try again later.
+┃
+╰━━━━━━━━━━━━━━━━━━━━╯`
+        }, { quoted: m });
+    }
+}
+break;
+
+//==================================================//           
+            
+
 
 case 'enc':
 case 'encrypt': {
