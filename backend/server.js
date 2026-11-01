@@ -20,11 +20,11 @@ const {
     startSession,
     removeSession,
     isConnected,
-    listSavedSessionIds,
-    shutdownSessions
+    listSavedSessionIds
 } = require('../src/session');
 
 const adminRouter = require('./admin');
+const userAuth = require('./users');
 
 const app = express();
 
@@ -51,6 +51,76 @@ app.use(express.static(PUBLIC_DIR, {
 
 // Admin API
 app.use('/api/admin', adminRouter);
+
+// User accounts: email + password.
+const authWindows = new Map();
+function allowAuthAttempt(req) {
+    const ip = String(req.ip || req.socket.remoteAddress || 'unknown');
+    const now = Date.now();
+    const item = authWindows.get(ip) || { start: now, count: 0 };
+    if (now - item.start > 15 * 60 * 1000) { item.start = now; item.count = 0; }
+    item.count += 1;
+    authWindows.set(ip, item);
+    return item.count <= 12;
+}
+
+app.post('/api/auth/register', (req, res) => {
+    if (!allowAuthAttempt(req)) return jsonError(res, 429, 'Too many attempts. Please wait and try again.');
+    try {
+        const user = userAuth.register(req.body?.email, req.body?.password);
+        userAuth.setCookie(res, user);
+        res.status(201).json({ ok: true, user: userAuth.publicUser(user) });
+    } catch (err) {
+        jsonError(res, 400, err.message || 'Could not create your account.');
+    }
+});
+
+app.post('/api/auth/login', (req, res) => {
+    if (!allowAuthAttempt(req)) return jsonError(res, 429, 'Too many attempts. Please wait and try again.');
+    const user = userAuth.authenticate(req.body?.email, req.body?.password);
+    if (!user) return jsonError(res, 401, 'Email or password is incorrect.');
+    userAuth.setCookie(res, user);
+    res.json({ ok: true, user: userAuth.publicUser(user) });
+});
+
+app.post('/api/auth/logout', (_req, res) => {
+    userAuth.clearCookie(res);
+    res.json({ ok: true });
+});
+
+app.get('/api/auth/me', userAuth.requireUser, (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({ ok: true, user: userAuth.publicUser(req.user) });
+});
+
+app.get('/api/user/session', userAuth.requireUser, (req, res) => {
+    let sessionId = req.user.sessionId;
+    const paired = Boolean(sessionId && listSavedSessionIds().includes(sessionId));
+    if (sessionId && !paired && !isConnected(sessionId)) {
+        userAuth.clearSession(req.user.id, sessionId);
+        sessionId = null;
+    }
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        ok: true,
+        hasSession: Boolean(sessionId),
+        connected: sessionId ? isConnected(sessionId) : false,
+        paired,
+    });
+});
+
+app.delete('/api/user/session', userAuth.requireUser, async (req, res) => {
+    const sessionId = req.user.sessionId;
+    if (!sessionId) return res.json({ ok: true, message: 'No WhatsApp session is linked.' });
+    try {
+        await removeSession(sessionId);
+        userAuth.clearSession(req.user.id, sessionId);
+        res.json({ ok: true, message: 'Your WhatsApp session was disconnected and removed.' });
+    } catch (err) {
+        console.error('[SHADOW USER] Session removal failed:', err?.message || err);
+        jsonError(res, 500, 'Could not remove the WhatsApp session.');
+    }
+});
 
 function jsonError(res, status, message) {
     return res.status(status).json({
@@ -95,6 +165,8 @@ function expireRequest(item) {
     item.code = null;
     item.message = 'Pairing request expired. Start again for a new code.';
 
+    const owner = userAuth.findUserBySession(item.sessionId);
+    if (owner) userAuth.clearSession(owner.id, item.sessionId);
     removeSession(item.sessionId).catch((err) => {
         console.error(
             '[SHADOW PAIR] Expiration cleanup failed:',
@@ -115,7 +187,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 // Start pairing
-app.post('/api/pair', async (req, res) => {
+app.post('/api/pair', userAuth.requireUser, async (req, res) => {
     if (!allowRequest(req)) {
         return jsonError(
             res,
@@ -133,6 +205,10 @@ app.post('/api/pair', async (req, res) => {
             400,
             'Enter a valid international number with country code.'
         );
+    }
+
+    if (req.user.sessionId) {
+        return jsonError(res, 409, 'You already have a WhatsApp session. Disconnect it before pairing another number.');
     }
 
     const active = [...requests.values()].filter((item) =>
@@ -154,6 +230,7 @@ app.post('/api/pair', async (req, res) => {
 
     const item = {
         requestId,
+        ownerId: req.user.id,
         sessionId,
         status: 'starting',
         code: null,
@@ -163,6 +240,7 @@ app.post('/api/pair', async (req, res) => {
     };
 
     requests.set(requestId, item);
+    userAuth.setSession(req.user.id, sessionId);
 
     // Respond immediately so the browser can begin polling.
     res.status(202).json({
@@ -206,6 +284,7 @@ app.post('/api/pair', async (req, res) => {
                     : 'WhatsApp could not issue a pairing code. Check the number and try again.';
 
                 removeSession(sessionId).catch(() => {});
+                userAuth.clearSession(req.user.id, sessionId);
             },
 
             onPairingFailed: () => {
@@ -215,6 +294,8 @@ app.post('/api/pair', async (req, res) => {
                 item.code = null;
                 item.message =
                     'Pairing failed. Please start a new request.';
+                removeSession(sessionId).catch(() => {});
+                userAuth.clearSession(req.user.id, sessionId);
             },
 
             onConnected: () => {
@@ -237,6 +318,7 @@ app.post('/api/pair', async (req, res) => {
                 item.status = 'error';
                 item.code = null;
                 item.message = 'This WhatsApp session was logged out.';
+                userAuth.clearSession(req.user.id, sessionId);
             },
 
             onReplaced: () => {
@@ -253,6 +335,7 @@ app.post('/api/pair', async (req, res) => {
             item.status = 'error';
             item.message =
                 'Session initialization was interrupted. Please try again.';
+            userAuth.clearSession(req.user.id, sessionId);
         }
 
     } catch (err) {
@@ -269,16 +352,17 @@ app.post('/api/pair', async (req, res) => {
         );
 
         removeSession(sessionId).catch(() => {});
+        userAuth.clearSession(req.user.id, sessionId);
     }
 });
 
 // Pairing status
-app.get('/api/status/:requestId', (req, res) => {
+app.get('/api/status/:requestId', userAuth.requireUser, (req, res) => {
     const item = requests.get(req.params.requestId);
 
     res.set('Cache-Control', 'no-store');
 
-    if (!item) {
+    if (!item || item.ownerId !== req.user.id) {
         return jsonError(
             res,
             404,
@@ -315,7 +399,7 @@ app.get('/api/status/:requestId', (req, res) => {
 // Restore only website-created paired sessions.
 async function restoreSessions() {
     const saved = listSavedSessionIds().filter((id) =>
-        /^web_[a-f0-9]{32}$/.test(id)
+        /^web_[a-f0-9]{32}$/.test(id) && userAuth.findUserBySession(id)
     );
 
     console.log(
@@ -357,6 +441,10 @@ setInterval(() => {
         if (now - item.createdAt > REQUEST_RETENTION_MS) {
             requests.delete(id);
         }
+    }
+
+    for (const [ip, record] of authWindows) {
+        if (now - record.start > 30 * 60 * 1000) authWindows.delete(ip);
     }
 
     for (const [ip, record] of ipWindows) {
@@ -413,31 +501,11 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
     await restoreSessions();
 });
 
-// Graceful shutdown. Close sockets without logging out or deleting auth files.
-let shuttingDown = false;
-async function gracefulShutdown(signal) {
-    if (shuttingDown) return;
-    shuttingDown = true;
-
-    console.log(`[SHADOW PAIR] ${signal} received; closing sessions safely...`);
-
-    const forceExit = setTimeout(() => {
-        console.error('[SHADOW PAIR] Shutdown timed out; exiting.');
-        process.exit(1);
-    }, 15000);
-    forceExit.unref();
-
-    try {
-        await shutdownSessions();
-    } catch (err) {
-        console.error('[SHADOW PAIR] Session shutdown warning:', err?.message || err);
-    }
+// Graceful shutdown.
+process.on('SIGTERM', () => {
+    console.log('[SHADOW PAIR] Shutting down...');
 
     server.close(() => {
-        clearTimeout(forceExit);
         process.exit(0);
     });
-}
-
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+});
