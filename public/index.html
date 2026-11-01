@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#050b10">
-  <title>SHADOW MD PAIR</title>
+  <title>SHADOW MD — User Dashboard</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@500;600;700&display=swap" rel="stylesheet">
@@ -28,20 +28,58 @@
 
       <div class="online">
         <span class="online-dot"></span>
-        PAIRING PORTAL
+        BOT DASHBOARD
       </div>
     </header>
 
+    <!-- USER ACCOUNT AREA -->
+    <section id="accountArea" class="pair-card account-card">
+      <div class="card-heading">
+        <div class="card-icon">亗</div>
+        <div>
+          <h2 id="accountTitle">SHADOW MD Account</h2>
+          <p id="accountSubtitle">Create an account or sign in to manage your bot.</p>
+        </div>
+      </div>
+
+      <form id="accountForm">
+        <label for="accountEmail">EMAIL ADDRESS</label>
+        <input type="email" id="accountEmail" name="email" placeholder="you@example.com" autocomplete="email" maxlength="254" required>
+
+        <label for="accountPassword">PASSWORD</label>
+        <input type="password" id="accountPassword" name="password" placeholder="At least 10 characters" autocomplete="new-password" minlength="10" maxlength="128" required>
+
+        <button type="submit" id="accountSubmit" class="generate-btn">CREATE ACCOUNT →</button>
+      </form>
+
+      <p id="accountMessage" role="status" aria-live="polite"></p>
+      <button type="button" id="switchAccountMode" class="copy-btn">ALREADY HAVE AN ACCOUNT? LOG IN</button>
+    </section>
+
     <!-- PAIRING PAGE -->
-    <div id="pairingPage">
+    <div id="pairingPage" hidden>
+      <div class="account-toolbar">
+        <span id="signedInEmail"></span>
+        <button type="button" id="userLogout" class="copy-btn">LOG OUT</button>
+      </div>
+      <section id="userSessionCard" class="pair-card" hidden>
+        <div class="card-heading">
+          <div class="card-icon">◉</div>
+          <div>
+            <h2>Your WhatsApp Bot</h2>
+            <p id="userSessionMessage">Checking your connection…</p>
+          </div>
+        </div>
+        <button type="button" id="disconnectSession" class="copy-btn">DISCONNECT WHATSAPP</button>
+      </section>
 
       <section class="welcome">
         <div class="eyebrow">WHATSAPP CONNECTION SYSTEM</div>
-        <h1>SHADOW <span>PAIR</span></h1>
+        <h1>SHADOW <span>MD</span></h1>
         <p>Connect your WhatsApp account securely using a pairing code.</p>
       </section>
 
-      <section class="pair-card">
+      <section id="pairCard" class="pair-card">
 
         <div class="card-heading">
           <div class="card-icon">⌁</div>
@@ -246,8 +284,8 @@
     </section>
 
     <footer>
-      <div class="footer-brand">亗 SHADOW MD PAIR</div>
-      <p>Developed by <strong>𝐒𝚳𝚰𝐋𝚵 𝚳𝚯𝐃𝚯</strong></p>
+      <div class="footer-brand">亗 SHADOW MD</div>
+      <p>Developed by <strong> 𝐒𝚳𝚰𝐋𝚵 𝚳𝚯𝐃𝐙</strong></p>
       <small>© 2026 SHADOW MD. All rights reserved.</small>
 
       <button type="button" id="openAdmin" class="admin-open-btn">
