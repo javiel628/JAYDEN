@@ -991,24 +991,27 @@ break;
 // 亗 SHADOW MD — LINKS
 //==================================================//
 
-case "repo":
-case "link":
-case "pair": {
-    await bot.sendMessage(m.chat, {
-        text: `╭━━〔 亗 𝐒𝐇𝐀𝐃𝐎𝐖 𝐌𝐃 亗 〕━━╮
+//==================================================//
+// SHADOW REPO / LINK / PAIR
+//==================================================//
+
+case 'repo':
+case 'link-bot':
+case 'pair': {
+    const pairLink = 'https://shadow-logs.onrender.com/';
+
+    return m.reply(`╭━━〔 亗 𝐒𝐇𝐀𝐃𝐎𝐖 𝐌𝐃 亗 〕━━╮
 ┃
-┃  🌐 𝐒𝐇𝐀𝐃𝐎𝐖 𝐌𝐃
+┃  🔗 PAIRING & CONNECTION
 ┃
-┃  🔗 PAIRING & WEBSITE
+┃  🌐 Pairing Website:
+┃  ${pairLink}
 ┃
-┃  https://shadow-logs.onrender.com/
+┃  📲 Open the link to connect
+┃  your WhatsApp account.
 ┃
-┃  ⚡ CONNECT • PAIR • HOST
-┃
-╰━━━━━━━━━━━━━━━━━━━━╯`
-    }, { quoted: m });
+╰━━━━━━━━━━━━━━━━━━━━╯`);
 }
-break;
 
 //==================================================//
 
@@ -1016,182 +1019,14 @@ break;
 // 亗 SHADOW MD — UPDATE
 //==================================================//
 
-case "update": {
-    try {
-        const axios = require("axios");
 
-        const response = await axios.get(
-            "https://api.github.com/repos/javiel628/shadow/commits",
-            {
-                headers: { "User-Agent": "SHADOW-MD" },
-                params: { per_page: 1 }
-            }
-        );
-
-        const latestCommit = response.data[0]?.sha;
-
-        if (!latestCommit) {
-            throw new Error("No commit found");
-        }
-
-        const deployedCommit = process.env.GIT_COMMIT_SHA;
-
-        if (deployedCommit && deployedCommit === latestCommit) {
-            return await bot.sendMessage(m.chat, {
-                text: `╭━━〔 亗 𝐒𝐇𝐀𝐃𝐎𝐖 𝐌𝐃 亗 〕━━╮
-┃
-┃  <escape>✨</escape> SYSTEM STATUS
-┃
-┃  <escape>✅</escape> BOT IS UP TO DATE
-┃
-┃  No new updates available.
-┃  You're running the latest version.
-┃
-╰━━━━━━━━━━━━━━━━━━━━╯`
-            }, { quoted: m });
-        }
-
-        await bot.sendMessage(m.chat, {
-            text: `╭━━〔 亗 𝐒𝐇𝐀𝐃𝐎𝐖 𝐌𝐃 亗 〕━━╮
-┃
-┃  <escape>🚀</escape> UPDATE AVAILABLE
-┃
-┃  A newer version was found!
-┃
-┃  Latest commit:
-┃  ${latestCommit.slice(0, 8)}
-┃
-┃  <escape>⚙️</escape> Deploy the latest version
-┃  from your Render dashboard.
-┃
-╰━━━━━━━━━━━━━━━━━━━━╯`
-        }, { quoted: m });
-
-    } catch (error) {
-        await bot.sendMessage(m.chat, {
-            text: `╭━━〔 亗 𝐒𝐇𝐀𝐃𝐎𝐖 𝐌𝐃 亗 〕━━╮
-┃
-┃  <escape>❌</escape> UPDATE CHECK FAILED
-┃
-┃  Could not connect to GitHub.
-┃  Please try again later.
-┃
-╰━━━━━━━━━━━━━━━━━━━━╯`
-        }, { quoted: m });
-    }
-}
-break;
 
 //==================================================//           
             
 
 
-case 'enc':
-case 'encrypt': {
-    const JsConfuser = require('js-confuser');
 
-    const quoted = m.quoted;
 
-    if (!quoted) {
-        return m.reply('❌ Reply to a JavaScript (.js) file.');
-    }
-
-    const fileName = quoted.fileName || quoted.msg?.fileName || '';
-
-    if (!fileName.toLowerCase().endsWith('.js')) {
-        return m.reply('❌ Only .js files are supported.');
-    }
-
-    try {
-        await sock.sendMessage(m.chat, {
-            react: { text: '⏳', key: m.key }
-        });
-
-        const docBuffer = await quoted.download();
-
-        if (!docBuffer) {
-            return m.reply('❌ Failed to download the file.');
-        }
-
-        const result = await JsConfuser.obfuscate(
-            docBuffer.toString('utf-8'),
-            {
-                target: 'node',
-                preset: 'high',
-                compact: true,
-                minify: true,
-                flatten: true,
-
-                identifierGenerator: function () {
-                    const originalString = 'SMILEMODZ';
-                    const randomString = (length) => {
-                        let result = '';
-                        const characters =
-                            'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-
-                        for (let i = 0; i < length; i++) {
-                            result += characters.charAt(
-                                Math.floor(Math.random() * characters.length)
-                            );
-                        }
-
-                        return result;
-                    };
-
-                    return originalString + randomString(2);
-                },
-
-                renameVariables: true,
-                renameGlobals: false,
-                stringEncoding: true,
-                stringSplitting: 0.0,
-                stringConcealing: true,
-                stringCompression: true,
-                duplicateLiteralsRemoval: 1.0,
-                controlFlowFlattening: 1.0,
-                opaquePredicates: 0.9,
-                deadCode: 0.0,
-                dispatcher: true,
-                calculator: true,
-                hexadecimalNumbers: true,
-                movedDeclarations: true,
-                objectExtraction: true,
-                globalConcealing: true
-            }
-        );
-
-        const output = result.code || result;
-
-        await sock.sendMessage(m.chat, {
-            document: Buffer.from(output, 'utf-8'),
-            mimetype: 'application/javascript',
-            fileName: `SHADOW-${fileName}`,
-            caption: `
-╭━━〔 亗 SHADOW MD 亗 〕━━╮
-┃
-┃  🔐 ENCRYPTION SUCCESSFUL
-┃
-┃  📁 File: ${fileName}
-┃  🛡️ Protection: HIGH
-┃
-┃  👨‍💻 DEVELOPER
-┃  𝐒𝚳𝚰𝐋𝚵 𝚳𝚯𝐃𝐙
-┃
-╰━━━━━━━━━━━━━━━━━━╯
-            `.trim()
-        }, { quoted: m });
-
-        await sock.sendMessage(m.chat, {
-            react: { text: '✅', key: m.key }
-        });
-
-    } catch (err) {
-        console.error('SHADOW ENCRYPT ERROR:', err);
-        return m.reply(`❌ Encryption failed: ${err.message}`);
-    }
-
-    break;
-}
 
 
 
