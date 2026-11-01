@@ -273,6 +273,75 @@ router.get('/logs/stream', requireAdmin, (req, res) => {
   res.on('close', () => { clearInterval(heartbeat); unsubscribe(); });
 });
 
+
+// Check GitHub for a newer revision and ask Render to deploy it.
+let lastDeployRequestAt = 0;
+router.post('/updates/check', requireAdmin, async (_req, res) => {
+  const repoApi = 'https://api.github.com/repos/javiel628/shadow';
+  try {
+    const headers = {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'SHADOW-MD-Update-Checker',
+    };
+    const repoResponse = await fetch(repoApi, {
+      headers,
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!repoResponse.ok) throw new Error('GitHub repository could not be checked.');
+    const repo = await repoResponse.json();
+    const branch = String(process.env.RENDER_GIT_BRANCH || repo.default_branch || 'main');
+    const commitResponse = await fetch(`${repoApi}/commits/${encodeURIComponent(branch)}`, {
+      headers,
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!commitResponse.ok) throw new Error('Could not read the latest GitHub update.');
+    const latest = await commitResponse.json();
+    const latestSha = String(latest.sha || '');
+    const deployedSha = String(process.env.RENDER_GIT_COMMIT || process.env.SHADOW_CURRENT_COMMIT || '');
+    if (!/^[a-f0-9]{40}$/i.test(latestSha)) throw new Error('GitHub returned an invalid revision.');
+    if (!deployedSha) {
+      return res.status(503).json({
+        ok: false,
+        code: 'DEPLOYED_REVISION_UNKNOWN',
+        error: 'Cannot identify the deployed revision. Set SHADOW_CURRENT_COMMIT if your host does not provide RENDER_GIT_COMMIT.',
+      });
+    }
+    if (latestSha.toLowerCase() === deployedSha.toLowerCase()) {
+      return res.json({ ok: true, status: 'up-to-date', message: '✨ SHADOW MD is already up to date. No new updates are available.', latestCommit: latestSha.slice(0, 7) });
+    }
+    const deployHook = process.env.RENDER_DEPLOY_HOOK;
+    if (!deployHook) {
+      return res.status(503).json({
+        ok: false,
+        code: 'DEPLOY_HOOK_MISSING',
+        error: 'A new update is available, but automatic updates are not configured. Add RENDER_DEPLOY_HOOK in your Render environment variables.',
+        latestCommit: latestSha.slice(0, 7),
+      });
+    }
+    if (Date.now() - lastDeployRequestAt < 60 * 1000) {
+      return res.status(429).json({ ok: false, error: 'An update was requested recently. Please wait a minute before trying again.' });
+    }
+    lastDeployRequestAt = Date.now();
+    const deployResponse = await fetch(deployHook, {
+      method: 'POST',
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!deployResponse.ok) {
+      lastDeployRequestAt = 0;
+      throw new Error('Render did not accept the deployment request. Check your deploy hook.');
+    }
+    return res.json({
+      ok: true,
+      status: 'deploy-started',
+      message: '🚀 Update found! Render has accepted the deployment request. SHADOW MD will restart when the update is ready.',
+      latestCommit: latestSha.slice(0, 7),
+    });
+  } catch (error) {
+    console.error('[SHADOW ADMIN] Update check failed:', error?.message || error);
+    return res.status(502).json({ ok: false, error: error.message || 'Could not check for updates right now.' });
+  }
+});
+
 // List saved web pairing sessions.
 router.get('/sessions', requireAdmin, (_req, res) => {
   try {
