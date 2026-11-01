@@ -205,7 +205,114 @@ copyBtn.addEventListener('click', async () => {
   const userSessionMessage = document.getElementById('userSessionMessage');
   const pairCard = document.getElementById('pairCard');
   const disconnectButton = document.getElementById('disconnectSession');
+  const userLogsList = document.getElementById('userLogsList');
+  const userLogsStatus = document.getElementById('userLogsStatus');
+  const userLogsLive = document.getElementById('userLogsLive');
+  const userLogLevel = document.getElementById('userLogLevel');
+  const refreshUserLogsButton = document.getElementById('refreshUserLogs');
   let accountMode = 'register';
+  let userLogEvents = [];
+  let userLogStream = null;
+  let userHasLogSession = false;
+
+  function closeUserLogStream() {
+    if (userLogStream) userLogStream.close();
+    userLogStream = null;
+    userLogsLive.textContent = '● OFFLINE';
+    userLogsLive.classList.remove('is-live');
+  }
+
+  function formatLogTime(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Unknown time';
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium', timeStyle: 'short'
+    }).format(date);
+  }
+
+  function renderUserLogs() {
+    const level = userLogLevel.value;
+    const rows = userLogEvents.filter((item) => level === 'all' || item.level === level);
+    userLogsList.replaceChildren();
+    if (!userHasLogSession) {
+      userLogsStatus.textContent = 'Connect your WhatsApp account to start seeing bot activity here.';
+      return;
+    }
+    if (!rows.length) {
+      userLogsStatus.textContent = userLogEvents.length
+        ? 'No activity matches this filter.'
+        : 'No activity recorded yet. Connect your bot or use a command to generate logs.';
+      return;
+    }
+    userLogsStatus.textContent = `${rows.length} recent ${rows.length === 1 ? 'event' : 'events'} shown`;
+    for (const item of rows) {
+      const row = document.createElement('article');
+      row.className = `user-log-row log-${['success','warn','error'].includes(item.level) ? item.level : 'info'}`;
+      const top = document.createElement('div');
+      top.className = 'user-log-top';
+      const type = document.createElement('strong');
+      type.textContent = String(item.type || 'activity').replace(/_/g, ' ').toUpperCase();
+      const time = document.createElement('time');
+      time.dateTime = item.at || '';
+      time.textContent = formatLogTime(item.at);
+      top.append(type, time);
+      const message = document.createElement('p');
+      message.textContent = item.message || 'Activity recorded';
+      row.append(top, message);
+      if (item.metadata && (item.metadata.command || item.metadata.scope)) {
+        const details = document.createElement('small');
+        const bits = [];
+        if (item.metadata.command) bits.push(`Command: .${item.metadata.command}`);
+        if (item.metadata.scope) bits.push(item.metadata.scope);
+        details.textContent = bits.join(' · ');
+        row.append(details);
+      }
+      userLogsList.append(row);
+    }
+  }
+
+  function addUserLog(item) {
+    if (!item || !item.id || userLogEvents.some((entry) => entry.id === item.id)) return;
+    userLogEvents.unshift(item);
+    userLogEvents = userLogEvents.slice(0, 100);
+    renderUserLogs();
+  }
+
+  async function refreshUserLogs() {
+    if (!userHasLogSession) {
+      userLogEvents = [];
+      renderUserLogs();
+      return;
+    }
+    refreshUserLogsButton.disabled = true;
+    userLogsStatus.textContent = 'Loading your bot activity…';
+    try {
+      const data = await api('/api/user/logs');
+      userLogEvents = Array.isArray(data.logs) ? data.logs : [];
+      renderUserLogs();
+    } catch (err) {
+      userLogsStatus.textContent = err.message || 'Could not load your bot logs.';
+    } finally {
+      refreshUserLogsButton.disabled = false;
+    }
+  }
+
+  function openUserLogStream() {
+    closeUserLogStream();
+    if (!userHasLogSession) return;
+    userLogStream = new EventSource('/api/user/logs/stream');
+    userLogStream.onopen = () => {
+      userLogsLive.textContent = '● LIVE';
+      userLogsLive.classList.add('is-live');
+    };
+    userLogStream.onmessage = (event) => {
+      try { addUserLog(JSON.parse(event.data)); } catch {}
+    };
+    userLogStream.onerror = () => {
+      userLogsLive.textContent = '● RECONNECTING';
+      userLogsLive.classList.remove('is-live');
+    };
+  }
 
   function setMode(mode) {
     accountMode = mode;
@@ -241,6 +348,9 @@ copyBtn.addEventListener('click', async () => {
     signedInEmail.textContent = user.email;
     try {
       const state = await api('/api/user/session');
+      userHasLogSession = Boolean(state.hasSession);
+      await refreshUserLogs();
+      if (userHasLogSession) openUserLogStream();
       if (state.hasSession) {
         userSessionCard.hidden = false;
         pairCard.hidden = true;
@@ -259,6 +369,9 @@ copyBtn.addEventListener('click', async () => {
       showStatus('error', err.message);
     }
   }
+
+  refreshUserLogsButton.addEventListener('click', refreshUserLogs);
+  userLogLevel.addEventListener('change', renderUserLogs);
 
   switchMode.addEventListener('click', () => {
     setMode(accountMode === 'register' ? 'login' : 'register');
@@ -285,6 +398,10 @@ copyBtn.addEventListener('click', async () => {
   });
 
   document.getElementById('userLogout').addEventListener('click', async () => {
+    closeUserLogStream();
+    userHasLogSession = false;
+    userLogEvents = [];
+    userLogsList.replaceChildren();
     try { await api('/api/auth/logout', { method: 'POST' }); } catch {}
     pairingPage.hidden = true;
     accountArea.hidden = false;
@@ -300,6 +417,9 @@ copyBtn.addEventListener('click', async () => {
       userSessionMessage.textContent = data.message;
       userSessionCard.hidden = true;
       pairCard.hidden = false;
+      userHasLogSession = false;
+      closeUserLogStream();
+      await refreshUserLogs();
       showStatus('expired', 'Your WhatsApp session was removed. You can pair again.');
     } catch (err) {
       userSessionMessage.textContent = err.message;
@@ -311,6 +431,7 @@ copyBtn.addEventListener('click', async () => {
   api('/api/auth/me')
     .then((data) => showDashboard(data.user))
     .catch(() => {
+      closeUserLogStream();
       accountArea.hidden = false;
       pairingPage.hidden = true;
       setMode('register');
