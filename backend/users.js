@@ -145,6 +145,11 @@ function clearSession(userId, expectedSessionId) {
 function findUserBySession(sessionId) {
   return store.users.find((user) => user.sessionId === sessionId) || null;
 }
+function listUsers() {
+  return store.users.map((user) => ({
+    id: user.id, email: user.email, createdAt: user.createdAt, sessionId: user.sessionId || null,
+  }));
+}
 function requireUser(req, res, next) {
   const user = verifyToken(req.cookies?.[COOKIE_NAME]);
   if (!user) return res.status(401).json({ ok: false, error: 'Please log in to continue.' });
@@ -154,5 +159,5 @@ function requireUser(req, res, next) {
 
 module.exports = {
   COOKIE_NAME, COOKIE_MAX_AGE, register, authenticate, setCookie, clearCookie,
-  publicUser, requireUser, getUserById, setSession, clearSession, findUserBySession,
+  publicUser, requireUser, getUserById, setSession, clearSession, findUserBySession, listUsers,
 };
