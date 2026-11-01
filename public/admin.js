@@ -1,152 +1,265 @@
-
 'use strict';
 
 document.addEventListener('DOMContentLoaded', () => {
-  const loginForm = document.getElementById('adminLoginForm');
-  const loginBox = document.getElementById('adminLogin');
-  const dashboard = document.getElementById('adminDashboard');
-  const loginMessage = document.getElementById('adminLoginMessage');
-  const sessionsMessage = document.getElementById('sessionsMessage');
-  const sessionsList = document.getElementById('sessionsList');
-
-  const totalSessions = document.getElementById('totalSessions');
-  const connectedSessions = document.getElementById('connectedSessions');
-
-  const loginBtn = document.getElementById('adminLoginBtn');
-  const refreshBtn = document.getElementById('refreshSessions');
-  const logoutBtn = document.getElementById('adminLogout');
+  const $ = (id) => document.getElementById(id);
+  const loginForm = $('adminLoginForm');
+  const loginBox = $('adminLogin');
+  const dashboard = $('adminDashboard');
+  const loginMessage = $('adminLoginMessage');
+  const sessionsMessage = $('sessionsMessage');
+  const sessionsList = $('sessionsList');
+  const usersList = $('usersList');
+  const logsList = $('logsList');
+  const totalUsers = $('totalUsers');
+  const totalSessions = $('totalSessions');
+  const connectedSessions = $('connectedSessions');
+  const offlineSessions = $('offlineSessions');
+  const loginBtn = $('adminLoginBtn');
+  const refreshBtn = $('refreshSessions');
+  const logoutBtn = $('adminLogout');
+  const liveState = $('liveLogState');
+  let stream = null;
+  let allUsers = [];
+  let allSessions = [];
+  let currentTab = 'sessions';
+  const seenLogIds = new Set();
 
   async function api(url, options = {}) {
     const response = await fetch(url, {
       credentials: 'same-origin',
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(options.headers || {})
-      }
+      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
     });
-
     const data = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Request failed.');
-    }
-
+    if (!response.ok) throw new Error(data.error || 'Request failed.');
     return data;
   }
 
   function showMessage(element, message, isError = false) {
     if (!element) return;
-
     element.textContent = message;
-    element.style.color = isError ? '#ff6464' : '#00ffcc';
-  }
-
-  function showDashboard() {
-    loginBox.hidden = true;
-    dashboard.hidden = false;
-    loadSessions();
+    element.style.color = isError ? '#ff7777' : '#00ffbd';
   }
 
   function showLogin() {
+    stopLiveLogs();
     loginBox.hidden = false;
     dashboard.hidden = true;
   }
 
-  function createSessionCard(session) {
-    const card = document.createElement('div');
-    card.className = 'session-item';
+  async function showDashboard() {
+    loginBox.hidden = true;
+    dashboard.hidden = false;
+    await Promise.all([loadDashboard(), loadUsers(), loadSessions()]);
+    await loadLogs();
+    startLiveLogs();
+  }
 
+  function setTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('[data-admin-tab]').forEach((button) => {
+      button.classList.toggle('active', button.dataset.adminTab === tab);
+    });
+    document.querySelectorAll('[data-admin-panel]').forEach((panel) => {
+      panel.hidden = panel.dataset.adminPanel !== tab;
+    });
+    if (tab === 'logs') loadLogs();
+  }
+
+  function createSessionCard(session) {
+    const card = document.createElement('article');
+    card.className = 'session-item admin-record';
     const details = document.createElement('div');
     details.className = 'session-details';
-
-    const number = document.createElement('strong');
-    number.textContent = session.number || 'Unknown number';
-
-    const status = document.createElement('p');
-    status.textContent = session.connected ? 'CONNECTED' : 'OFFLINE';
-    status.className = session.connected ? 'session-connected' : 'session-offline';
-
+    const title = document.createElement('strong');
+    title.textContent = session.ownerEmail || 'Unassigned account';
+    const number = document.createElement('p');
+    number.textContent = `WhatsApp: ${session.number || 'Not available'}`;
+    const status = document.createElement('span');
+    status.className = `record-status ${session.connected ? 'is-online' : 'is-offline'}`;
+    status.textContent = session.connected ? '● CONNECTED' : '● OFFLINE';
     const id = document.createElement('small');
     id.textContent = session.id;
-
-    details.append(number, status, id);
-
+    details.append(title, number, status, id);
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
     deleteBtn.className = 'delete-session-btn';
-    deleteBtn.textContent = 'DELETE';
-
+    deleteBtn.textContent = 'DELETE SESSION';
     deleteBtn.addEventListener('click', async () => {
-      if (!confirm('Delete this saved WhatsApp session?')) return;
-
+      if (!confirm(`Delete the WhatsApp session for ${session.ownerEmail || 'this user'}? This cannot be undone.`)) return;
       deleteBtn.disabled = true;
-      deleteBtn.textContent = 'DELETING...';
-
       try {
-        await api('/api/admin/sessions/' + encodeURIComponent(session.id), {
-          method: 'DELETE'
-        });
-
+        await api(`/api/admin/sessions/${encodeURIComponent(session.id)}`, { method: 'DELETE' });
         showMessage(sessionsMessage, 'Session deleted.');
-        await loadSessions();
+        await Promise.all([loadSessions(), loadDashboard(), loadUsers()]);
       } catch (error) {
         showMessage(sessionsMessage, error.message, true);
         deleteBtn.disabled = false;
-        deleteBtn.textContent = 'DELETE';
       }
     });
-
     card.append(details, deleteBtn);
     return card;
   }
 
-  async function loadSessions() {
-    sessionsList.textContent = 'Loading sessions...';
-    showMessage(sessionsMessage, '');
-
-    try {
-      const data = await api('/api/admin/sessions');
-
-      totalSessions.textContent = data.total ?? 0;
-      connectedSessions.textContent = data.connected ?? 0;
-
-      sessionsList.replaceChildren();
-
-      if (!data.sessions || data.sessions.length === 0) {
-        sessionsList.textContent = 'No saved pairing sessions found.';
-        return;
-      }
-
-      data.sessions.forEach(session => {
-        sessionsList.appendChild(createSessionCard(session));
-      });
-    } catch (error) {
-      sessionsList.textContent = error.message;
-
-      if (error.message.toLowerCase().includes('log in')) {
-        showLogin();
-      }
+  function renderSessions() {
+    sessionsList.replaceChildren();
+    if (!allSessions.length) {
+      sessionsList.textContent = 'No website bot sessions found yet.';
+      return;
+    }
+    allSessions.forEach((session) => sessionsList.append(createSessionCard(session)));
+    const filter = $('logSessionFilter');
+    if (filter) {
+      const current = filter.value;
+      filter.replaceChildren(new Option('All bot sessions', ''));
+      allSessions.forEach((session) => filter.add(new Option(`${session.ownerEmail || 'Unassigned'} · ${session.number || session.id.slice(0, 12)}`, session.id)));
+      filter.value = current;
     }
   }
 
-  loginForm?.addEventListener('submit', async event => {
-    event.preventDefault();
+  async function loadSessions() {
+    if (!sessionsList) return;
+    sessionsList.textContent = 'Loading sessions...';
+    try {
+      const data = await api('/api/admin/sessions');
+      allSessions = data.sessions || [];
+      renderSessions();
+    } catch (error) {
+      sessionsList.textContent = error.message;
+      if (error.message.toLowerCase().includes('log in')) showLogin();
+    }
+  }
 
+  async function loadDashboard() {
+    try {
+      const data = await api('/api/admin/overview');
+      totalUsers.textContent = data.totalUsers ?? 0;
+      totalSessions.textContent = data.totalSessions ?? 0;
+      connectedSessions.textContent = data.connected ?? 0;
+      offlineSessions.textContent = data.offline ?? 0;
+    } catch (error) {
+      showMessage(sessionsMessage, error.message, true);
+    }
+  }
+
+  function renderUsers() {
+    const query = ($('userSearch')?.value || '').trim().toLowerCase();
+    usersList.replaceChildren();
+    const users = allUsers.filter((user) => user.email.toLowerCase().includes(query));
+    if (!users.length) {
+      usersList.textContent = query ? 'No users match that search.' : 'No registered users yet.';
+      return;
+    }
+    users.forEach((user) => {
+      const card = document.createElement('article');
+      card.className = 'session-item admin-record';
+      const info = document.createElement('div');
+      info.className = 'session-details';
+      const email = document.createElement('strong');
+      email.textContent = user.email;
+      const joined = document.createElement('small');
+      joined.textContent = `Joined ${new Date(user.createdAt).toLocaleString()}`;
+      const status = document.createElement('span');
+      status.className = `record-status ${user.connected ? 'is-online' : 'is-offline'}`;
+      status.textContent = user.connected ? '● BOT CONNECTED' : (user.hasSession ? '● BOT OFFLINE' : '● NO BOT LINKED');
+      info.append(email, status, joined);
+      card.append(info);
+      usersList.append(card);
+    });
+  }
+
+  async function loadUsers() {
+    if (!usersList) return;
+    usersList.textContent = 'Loading users...';
+    try {
+      const data = await api('/api/admin/users');
+      allUsers = data.users || [];
+      renderUsers();
+    } catch (error) {
+      usersList.textContent = error.message;
+    }
+  }
+
+  function addLog(event, atTop = true) {
+    if (!event || seenLogIds.has(event.id)) return;
+    seenLogIds.add(event.id);
+    const empty = logsList.querySelector('.empty-logs');
+    if (empty) empty.remove();
+    const row = document.createElement('article');
+    row.className = `log-row log-${event.level || 'info'}`;
+    const top = document.createElement('div');
+    top.className = 'log-row-top';
+    const type = document.createElement('strong');
+    type.textContent = String(event.type || 'event').toUpperCase();
+    const time = document.createElement('time');
+    time.dateTime = event.at;
+    time.textContent = new Date(event.at).toLocaleString();
+    top.append(type, time);
+    const message = document.createElement('p');
+    message.textContent = event.message || '';
+    const meta = document.createElement('small');
+    const owner = allSessions.find((session) => session.id === event.sessionId);
+    meta.textContent = `${owner?.ownerEmail || event.sessionId} · ${event.level || 'info'}`;
+    row.append(top, message, meta);
+    if (atTop) logsList.prepend(row); else logsList.append(row);
+    while (logsList.children.length > 150) logsList.lastElementChild.remove();
+  }
+
+  async function loadLogs() {
+    if (!logsList) return;
+    logsList.textContent = 'Loading activity logs...';
+    seenLogIds.clear();
+    const level = $('logLevelFilter')?.value || '';
+    const sessionId = $('logSessionFilter')?.value || '';
+    const params = new URLSearchParams({ limit: '150' });
+    if (level) params.set('level', level);
+    if (sessionId) params.set('sessionId', sessionId);
+    try {
+      const data = await api(`/api/admin/logs?${params.toString()}`);
+      logsList.replaceChildren();
+      if (!data.logs?.length) {
+        const empty = document.createElement('p');
+        empty.className = 'empty-logs';
+        empty.textContent = 'No matching activity yet. New events will appear here live.';
+        logsList.append(empty);
+        return;
+      }
+      data.logs.forEach((event) => addLog(event, false));
+    } catch (error) {
+      logsList.textContent = error.message;
+    }
+  }
+
+  function startLiveLogs() {
+    stopLiveLogs();
+    const level = $('logLevelFilter')?.value || '';
+    const sessionId = $('logSessionFilter')?.value || '';
+    const params = new URLSearchParams();
+    if (level) params.set('level', level);
+    if (sessionId) params.set('sessionId', sessionId);
+    stream = new EventSource(`/api/admin/logs/stream?${params.toString()}`);
+    stream.onopen = () => { liveState.textContent = '● LIVE'; liveState.classList.add('live-on'); };
+    stream.onmessage = (message) => {
+      try { addLog(JSON.parse(message.data), true); } catch {}
+    };
+    stream.onerror = () => { liveState.textContent = '● RECONNECTING'; liveState.classList.remove('live-on'); };
+  }
+
+  function stopLiveLogs() {
+    if (stream) stream.close();
+    stream = null;
+    if (liveState) { liveState.textContent = '● OFFLINE'; liveState.classList.remove('live-on'); }
+  }
+
+  loginForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
     loginBtn.disabled = true;
     loginBtn.textContent = 'SIGNING IN...';
-
     showMessage(loginMessage, '');
-
-    const username = document.getElementById('adminUsername').value;
-    const password = document.getElementById('adminPassword').value;
-
+    const username = $('adminUsername').value;
+    const password = $('adminPassword').value;
     try {
-      await api('/api/admin/login', {
-        method: 'POST',
-        body: JSON.stringify({ username, password })
-      });
-
+      await api('/api/admin/login', { method: 'POST', body: JSON.stringify({ username, password }) });
       loginForm.reset();
       showDashboard();
     } catch (error) {
@@ -157,14 +270,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  refreshBtn?.addEventListener('click', loadSessions);
+  document.querySelectorAll('[data-admin-tab]').forEach((button) => button.addEventListener('click', () => setTab(button.dataset.adminTab)));
+  $('userSearch')?.addEventListener('input', renderUsers);
+  $('logLevelFilter')?.addEventListener('change', () => { loadLogs(); startLiveLogs(); });
+  $('logSessionFilter')?.addEventListener('change', () => { loadLogs(); startLiveLogs(); });
+  $('refreshLogs')?.addEventListener('click', loadLogs);
+  refreshBtn?.addEventListener('click', () => Promise.all([loadDashboard(), loadSessions(), loadUsers()]));
 
   logoutBtn?.addEventListener('click', async () => {
     try {
-      await api('/api/admin/logout', {
-        method: 'POST'
-      });
-
+      await api('/api/admin/logout', { method: 'POST' });
       showLogin();
       showMessage(loginMessage, 'You have logged out.');
     } catch (error) {
@@ -172,8 +287,5 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Restore an existing admin login when the page is opened.
-  api('/api/admin/me')
-    .then(showDashboard)
-    .catch(showLogin);
+  api('/api/admin/me').then(showDashboard).catch(showLogin);
 });
