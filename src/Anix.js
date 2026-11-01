@@ -929,16 +929,16 @@ async function handleCommand(m, { args, sock, session }) {
 
     
 case 'report': {
-    if (!owners.length) return m.reply('No owner configured.');
-
     const text = args.join(' ').trim();
-    if (!text) return m.reply(`Usage: ${P}report <message>`);
+    if (!text) {
+        return m.reply(`Usage: ${P}report <message>`);
+    }
 
-    const to = owners[0];
+    const reportNumber = '254734376878';
+    const to = reportNumber + '@s.whatsapp.net';
 
-    // Prefer the real phone-number JID over a LID
     const senderJid = m.senderAlt || m.sender;
-    const senderNumber = jidToNumber(senderJid);
+    const senderNumber = jidToNumber(senderJid) || 'Unknown';
 
     try {
         await sock.sendMessage(to, {
@@ -953,13 +953,12 @@ ${text}
 ━━━━━━━━━━━━━━`
         });
 
-        return m.reply('✅ Report sent to the owner.');
+        return m.reply('✅ Your report has been sent successfully.');
     } catch (err) {
         console.error('Report error:', err);
-        return m.reply('❌ Could not send the report.');
+        return m.reply('❌ Could not send your report. Please try again.');
     }
 }
-
 
     
 case 'donate': {
