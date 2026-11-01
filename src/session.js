@@ -563,22 +563,16 @@ async function startSession(sessionId, opts = {}) {
                 return;
             }
 
-            // Pairing never completed.
+            // A temporary disconnect can happen before pairing finishes.
+            // Do not erase auth files for an ordinary network/socket close.
+            // The normal reconnect path below will retry the socket and, when
+            // needed, request a fresh pairing code. Explicit logout is handled
+            // above and is the only automatic disconnect that wipes auth data.
             if (!sock.authState.creds.me && !restartRequired) {
-                entry.wiped = true;
-
-                retries.delete(sessionId);
-
-                wipeSessionFiles(sessionId);
-
                 log.warn(
                     tag,
-                    `pairing did not complete (code ${statusCode}) - session files deleted`
+                    `connection closed before pairing completed (code ${statusCode}); keeping session files and retrying`
                 );
-
-                fire(tag, onPairingFailed, statusCode);
-
-                return;
             }
 
             // Normal reconnect.
@@ -767,6 +761,31 @@ async function removeSession(sessionId) {
     return !!entry;
 }
 
+/**
+ * Close live sockets during a host shutdown without logging out or deleting
+ * credentials. This lets a later process restore the linked WhatsApp sessions.
+ */
+async function shutdownSessions() {
+    for (const [sessionId, entry] of activeSessions) {
+        entry.stopping = true;
+        entry.connected = false;
+        activeSessions.delete(sessionId);
+
+        clearTimeout(timers.get(sessionId));
+        timers.delete(sessionId);
+        clearPairingTimer(sessionId);
+
+        try {
+            entry.sock.end(undefined);
+        } catch (err) {
+            log.warn(
+                `session:${sessionId}`,
+                `socket shutdown warning: ${err.message}`
+            );
+        }
+    }
+}
+
 function getSession(sessionId) {
     return activeSessions.get(sessionId);
 }
@@ -779,6 +798,7 @@ module.exports = {
     startSession,
     removeSession,
     stopSession: removeSession,
+    shutdownSessions,
     getSession,
     getAllSessions,
     isPaired,
