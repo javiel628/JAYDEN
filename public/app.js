@@ -251,11 +251,16 @@ copyBtn.addEventListener('click', async () => {
       const top = document.createElement('div');
       top.className = 'user-log-top';
       const type = document.createElement('strong');
-      type.textContent = String(item.type || 'activity').replace(/_/g, ' ').toUpperCase();
+      const typeName = String(item.type || 'activity').replace(/_/g, ' ').toUpperCase();
+      const icons = { connection: '◉', pairing: '⌁', command: '⚡', message: '✉', error: '⚠' };
+      type.textContent = `${icons[String(item.type || '').toLowerCase()] || '✦'}  ${typeName}`;
+      const level = document.createElement('span');
+      level.className = `user-log-level level-${['success','warn','error'].includes(item.level) ? item.level : 'info'}`;
+      level.textContent = String(item.level || 'info').toUpperCase();
       const time = document.createElement('time');
       time.dateTime = item.at || '';
       time.textContent = formatLogTime(item.at);
-      top.append(type, time);
+      top.append(type, level, time);
       const message = document.createElement('p');
       message.textContent = item.message || 'Activity recorded';
       row.append(top, message);
@@ -263,8 +268,8 @@ copyBtn.addEventListener('click', async () => {
         const details = document.createElement('small');
         const bits = [];
         if (item.metadata.command) bits.push(`Command: .${item.metadata.command}`);
-        if (item.metadata.scope) bits.push(item.metadata.scope);
-        details.textContent = bits.join(' · ');
+        if (item.metadata.scope) bits.push(`LOCATION: ${item.metadata.scope}`);
+        details.textContent = bits.join('  ·  ');
         row.append(details);
       }
       userLogsList.append(row);
