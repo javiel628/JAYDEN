@@ -9,3 +9,6 @@ data/*.db
 data/users.json
 data/.user-auth-secret
 runtime-data/
+
+# Private activity logs
+logs/
