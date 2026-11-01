@@ -110,6 +110,46 @@ app.get('/api/user/session', userAuth.requireUser, (req, res) => {
     });
 });
 
+// A signed-in user can only read logs for the session assigned to their account.
+app.get('/api/user/logs', userAuth.requireUser, (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    const sessionId = req.user.sessionId;
+    if (!sessionId) return res.json({ ok: true, logs: [] });
+    const logs = activityLog.readEvents({ sessionId, limit: 100 }).map(({ sessionId: _privateSessionId, ...event }) => event);
+    res.json({ ok: true, logs });
+});
+
+// Live stream is scoped server-side; clients cannot request another user's session ID.
+app.get('/api/user/logs/stream', userAuth.requireUser, (req, res) => {
+    const sessionId = req.user.sessionId;
+    if (!sessionId) return res.status(204).end();
+
+    res.status(200);
+    res.set({
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+    });
+    res.flushHeaders?.();
+    res.write(': SHADOW MD live logs connected\n\n');
+
+    const unsubscribe = activityLog.subscribe((event) => {
+        if (event.sessionId !== sessionId || res.writableEnded) return;
+        const { sessionId: _privateSessionId, ...publicEvent } = event;
+        res.write(`data: ${JSON.stringify(publicEvent)}\n\n`);
+    });
+    const heartbeat = setInterval(() => {
+        if (!res.writableEnded) res.write(': keep-alive\n\n');
+    }, 20000);
+    heartbeat.unref?.();
+
+    res.on('close', () => {
+        clearInterval(heartbeat);
+        unsubscribe();
+    });
+});
+
 app.delete('/api/user/session', userAuth.requireUser, async (req, res) => {
     const sessionId = req.user.sessionId;
     if (!sessionId) return res.json({ ok: true, message: 'No WhatsApp session is linked.' });
@@ -293,6 +333,7 @@ app.post('/api/pair', userAuth.requireUser, async (req, res) => {
             onPairingFailed: () => {
                 if (isTerminal(item.status)) return;
 
+                activityLog.writeEvent(sessionId, 'pairing', 'WhatsApp pairing failed', 'error');
                 item.status = 'error';
                 item.code = null;
                 item.message =
@@ -319,6 +360,7 @@ app.post('/api/pair', userAuth.requireUser, async (req, res) => {
             onLoggedOut: () => {
                 if (item.status === 'expired') return;
 
+                activityLog.writeEvent(sessionId, 'connection', 'WhatsApp account logged out', 'warn');
                 item.status = 'error';
                 item.code = null;
                 item.message = 'This WhatsApp session was logged out.';
@@ -328,6 +370,7 @@ app.post('/api/pair', userAuth.requireUser, async (req, res) => {
             onReplaced: () => {
                 if (item.status === 'expired') return;
 
+                activityLog.writeEvent(sessionId, 'connection', 'WhatsApp session replaced by another connection', 'warn');
                 item.status = 'error';
                 item.code = null;
                 item.message =
