@@ -44,6 +44,7 @@ const {
 
 const { createSessionSettings } = require('./lib/settings');
 const log = require('./lib/logger');
+const activityLog = require('./lib/activity-log');
 
 // Persistent storage
 const STORAGE_ROOT = process.env.SHADOW_DATA_DIR || process.cwd();
@@ -386,6 +387,15 @@ async function startSession(sessionId, opts = {}) {
             rememberSent(result.key.id, result.message);
         }
 
+        const destination = String(args[0] || '');
+        activityLog.writeEvent(
+            sessionId,
+            'outgoing',
+            'Bot sent a WhatsApp message (content hidden)',
+            'info',
+            { scope: destination.endsWith('@g.us') ? 'group' : 'private' }
+        );
+
         return result;
     };
 
@@ -474,6 +484,9 @@ async function startSession(sessionId, opts = {}) {
     });
 
     sock.ev.on('connection.update', (update) => {
+        if (update.connection === 'connecting') {
+            activityLog.writeEvent(sessionId, 'connection', 'WhatsApp connection starting', 'info');
+        }
         if (activeSessions.get(sessionId) !== entry) {
             return;
         }
@@ -482,6 +495,7 @@ async function startSession(sessionId, opts = {}) {
 
         if (connection === 'close') {
             clearPairingTimer(sessionId);
+            activityLog.writeEvent(sessionId, 'connection', `WhatsApp disconnected (code ${lastDisconnect?.error?.output?.statusCode ?? 'unknown'})`, 'warn', { code: lastDisconnect?.error?.output?.statusCode });
 
             const statusCode =
                 lastDisconnect?.error?.output?.statusCode;
@@ -563,16 +577,22 @@ async function startSession(sessionId, opts = {}) {
                 return;
             }
 
-            // A temporary disconnect can happen before pairing finishes.
-            // Do not erase auth files for an ordinary network/socket close.
-            // The normal reconnect path below will retry the socket and, when
-            // needed, request a fresh pairing code. Explicit logout is handled
-            // above and is the only automatic disconnect that wipes auth data.
+            // Pairing never completed.
             if (!sock.authState.creds.me && !restartRequired) {
+                entry.wiped = true;
+
+                retries.delete(sessionId);
+
+                wipeSessionFiles(sessionId);
+
                 log.warn(
                     tag,
-                    `connection closed before pairing completed (code ${statusCode}); keeping session files and retrying`
+                    `pairing did not complete (code ${statusCode}) - session files deleted`
                 );
+
+                fire(tag, onPairingFailed, statusCode);
+
+                return;
             }
 
             // Normal reconnect.
@@ -626,6 +646,7 @@ async function startSession(sessionId, opts = {}) {
             retries.delete(sessionId);
 
             log.success(tag, `${config.botName} is online`);
+            activityLog.writeEvent(sessionId, 'connection', 'WhatsApp bot connected successfully', 'success');
 
             const ownJid =
                 sock.user?.id?.split(':')[0] + '@s.whatsapp.net';
@@ -692,6 +713,10 @@ async function startSession(sessionId, opts = {}) {
     // Messages.
     sock.ev.on('messages.upsert', (upsert) => {
         if (entry.stopping || entry.wiped) return;
+        if (upsert.type === 'notify' && Array.isArray(upsert.messages) && upsert.messages.length) {
+            const incoming = upsert.messages.filter((item) => !item.key?.fromMe).length;
+            if (incoming) activityLog.writeEvent(sessionId, 'message', `${incoming} incoming message event${incoming === 1 ? '' : 's'} received`, 'info');
+        }
 
         try {
             Promise.resolve(
@@ -761,31 +786,6 @@ async function removeSession(sessionId) {
     return !!entry;
 }
 
-/**
- * Close live sockets during a host shutdown without logging out or deleting
- * credentials. This lets a later process restore the linked WhatsApp sessions.
- */
-async function shutdownSessions() {
-    for (const [sessionId, entry] of activeSessions) {
-        entry.stopping = true;
-        entry.connected = false;
-        activeSessions.delete(sessionId);
-
-        clearTimeout(timers.get(sessionId));
-        timers.delete(sessionId);
-        clearPairingTimer(sessionId);
-
-        try {
-            entry.sock.end(undefined);
-        } catch (err) {
-            log.warn(
-                `session:${sessionId}`,
-                `socket shutdown warning: ${err.message}`
-            );
-        }
-    }
-}
-
 function getSession(sessionId) {
     return activeSessions.get(sessionId);
 }
@@ -798,7 +798,6 @@ module.exports = {
     startSession,
     removeSession,
     stopSession: removeSession,
-    shutdownSessions,
     getSession,
     getAllSessions,
     isPaired,
