@@ -66,22 +66,33 @@ function allowAuthAttempt(req) {
 }
 
 app.post('/api/auth/register', (req, res) => {
+    res.set('Cache-Control', 'no-store');
     if (!allowAuthAttempt(req)) return jsonError(res, 429, 'Too many attempts. Please wait and try again.');
     try {
         const user = userAuth.register(req.body?.email, req.body?.password);
         userAuth.setCookie(res, user);
-        res.status(201).json({ ok: true, user: userAuth.publicUser(user) });
+        return res.status(201).json({ ok: true, user: userAuth.publicUser(user) });
     } catch (err) {
-        jsonError(res, 400, err.message || 'Could not create your account.');
+        if (err.code) {
+            console.error('[SHADOW AUTH] Account registration storage error:', err.message);
+            return jsonError(res, 500, 'Account creation is temporarily unavailable. Please try again later.');
+        }
+        return jsonError(res, 400, err.message || 'Could not create your account.');
     }
 });
 
 app.post('/api/auth/login', (req, res) => {
+    res.set('Cache-Control', 'no-store');
     if (!allowAuthAttempt(req)) return jsonError(res, 429, 'Too many attempts. Please wait and try again.');
-    const user = userAuth.authenticate(req.body?.email, req.body?.password);
-    if (!user) return jsonError(res, 401, 'Email or password is incorrect.');
-    userAuth.setCookie(res, user);
-    res.json({ ok: true, user: userAuth.publicUser(user) });
+    try {
+        const user = userAuth.authenticate(req.body?.email, req.body?.password);
+        if (!user) return jsonError(res, 401, 'Email or password is incorrect.');
+        userAuth.setCookie(res, user);
+        return res.json({ ok: true, user: userAuth.publicUser(user) });
+    } catch (err) {
+        console.error('[SHADOW AUTH] Login error:', err?.message || err);
+        return jsonError(res, 500, 'Sign-in is temporarily unavailable. Please try again later.');
+    }
 });
 
 app.post('/api/auth/logout', (_req, res) => {
