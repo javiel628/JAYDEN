@@ -25,6 +25,7 @@ const {
 
 const adminRouter = require('./admin');
 const userAuth = require('./users');
+const activityLog = require('../src/lib/activity-log');
 
 const app = express();
 
@@ -267,6 +268,7 @@ app.post('/api/pair', userAuth.requireUser, async (req, res) => {
 
                 item.code = String(code);
                 item.status = 'code_ready';
+                activityLog.writeEvent(sessionId, 'pairing', 'Pairing code generated', 'success');
                 item.message =
                     'Enter this temporary code in WhatsApp Linked Devices.';
             },
@@ -276,6 +278,7 @@ app.post('/api/pair', userAuth.requireUser, async (req, res) => {
 
                 item.status = 'error';
                 item.code = null;
+                activityLog.writeEvent(sessionId, 'pairing', 'Pairing code request failed', 'error');
 
                 item.message = /429|rate/i.test(
                     String(err?.message || '')
@@ -310,6 +313,7 @@ app.post('/api/pair', userAuth.requireUser, async (req, res) => {
                 item.status = 'connected';
                 item.code = null;
                 item.message = 'WhatsApp connected successfully.';
+                activityLog.writeEvent(sessionId, 'pairing', 'WhatsApp pairing completed', 'success');
             },
 
             onLoggedOut: () => {
@@ -346,6 +350,7 @@ app.post('/api/pair', userAuth.requireUser, async (req, res) => {
                 'Could not start the WhatsApp session. Check server logs.';
         }
 
+        activityLog.writeEvent(sessionId, 'error', `Session start failed: ${err?.message || 'Unknown error'}`, 'error');
         console.error(
             '[SHADOW PAIR] Session start failed:',
             err?.message || err
