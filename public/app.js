@@ -189,3 +189,130 @@ copyBtn.addEventListener('click', async () => {
     copyBtn.textContent = 'SELECT CODE';
   }
 });
+
+// Account authentication and per-user dashboard.
+(() => {
+  const accountArea = document.getElementById('accountArea');
+  const pairingPage = document.getElementById('pairingPage');
+  const accountForm = document.getElementById('accountForm');
+  const accountTitle = document.getElementById('accountTitle');
+  const accountSubtitle = document.getElementById('accountSubtitle');
+  const accountSubmit = document.getElementById('accountSubmit');
+  const accountMessage = document.getElementById('accountMessage');
+  const switchMode = document.getElementById('switchAccountMode');
+  const signedInEmail = document.getElementById('signedInEmail');
+  const userSessionCard = document.getElementById('userSessionCard');
+  const userSessionMessage = document.getElementById('userSessionMessage');
+  const pairCard = document.getElementById('pairCard');
+  const disconnectButton = document.getElementById('disconnectSession');
+  let accountMode = 'register';
+
+  function setMode(mode) {
+    accountMode = mode;
+    const login = mode === 'login';
+    accountTitle.textContent = login ? 'Welcome Back' : 'Create Your Account';
+    accountSubtitle.textContent = login
+      ? 'Sign in to manage your SHADOW MD bot.'
+      : 'Register to connect and manage your own WhatsApp bot.';
+    accountSubmit.textContent = login ? 'LOG IN →' : 'CREATE ACCOUNT →';
+    document.getElementById('accountPassword').autocomplete = login ? 'current-password' : 'new-password';
+    document.getElementById('accountPassword').placeholder = login ? 'Enter your password' : 'At least 10 characters';
+    document.getElementById('accountPassword').minLength = login ? 1 : 10;
+    switchMode.textContent = login
+      ? 'NEW HERE? CREATE AN ACCOUNT'
+      : 'ALREADY HAVE AN ACCOUNT? LOG IN';
+    accountMessage.textContent = '';
+  }
+
+  async function api(url, options = {}) {
+    const response = await fetch(url, {
+      credentials: 'same-origin',
+      ...options,
+      headers: { ...(options.headers || {}) }
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) throw new Error(data.error || 'Request failed.');
+    return data;
+  }
+
+  async function showDashboard(user) {
+    accountArea.hidden = true;
+    pairingPage.hidden = false;
+    signedInEmail.textContent = user.email;
+    try {
+      const state = await api('/api/user/session');
+      if (state.hasSession) {
+        userSessionCard.hidden = false;
+        pairCard.hidden = true;
+        userSessionMessage.textContent = state.connected
+          ? 'Your WhatsApp bot is connected and running.'
+          : state.paired
+            ? 'Your WhatsApp session is saved. The bot is reconnecting or waiting for the server.'
+            : 'A session is assigned to your account. You can disconnect it before pairing again.';
+      } else {
+        userSessionCard.hidden = true;
+        pairCard.hidden = false;
+      }
+    } catch (err) {
+      userSessionCard.hidden = true;
+      pairCard.hidden = false;
+      showStatus('error', err.message);
+    }
+  }
+
+  switchMode.addEventListener('click', () => {
+    setMode(accountMode === 'register' ? 'login' : 'register');
+  });
+
+  accountForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    accountSubmit.disabled = true;
+    accountMessage.textContent = accountMode === 'register' ? 'Creating your account…' : 'Signing you in…';
+    const email = document.getElementById('accountEmail').value.trim();
+    const password = document.getElementById('accountPassword').value;
+    try {
+      const data = await api(`/api/auth/${accountMode}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      await showDashboard(data.user);
+    } catch (err) {
+      accountMessage.textContent = err.message;
+    } finally {
+      accountSubmit.disabled = false;
+    }
+  });
+
+  document.getElementById('userLogout').addEventListener('click', async () => {
+    try { await api('/api/auth/logout', { method: 'POST' }); } catch {}
+    pairingPage.hidden = true;
+    accountArea.hidden = false;
+    accountForm.reset();
+    setMode('login');
+  });
+
+  disconnectButton.addEventListener('click', async () => {
+    if (!window.confirm('Disconnect and remove your linked WhatsApp session?')) return;
+    disconnectButton.disabled = true;
+    try {
+      const data = await api('/api/user/session', { method: 'DELETE' });
+      userSessionMessage.textContent = data.message;
+      userSessionCard.hidden = true;
+      pairCard.hidden = false;
+      showStatus('expired', 'Your WhatsApp session was removed. You can pair again.');
+    } catch (err) {
+      userSessionMessage.textContent = err.message;
+    } finally {
+      disconnectButton.disabled = false;
+    }
+  });
+
+  api('/api/auth/me')
+    .then((data) => showDashboard(data.user))
+    .catch(() => {
+      accountArea.hidden = false;
+      pairingPage.hidden = true;
+      setMode('register');
+    });
+})();
