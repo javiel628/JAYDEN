@@ -1125,3 +1125,77 @@ footer small {
   .user-logs-heading h2 { font-size: 13px; }
   .user-log-top { align-items: flex-start; flex-direction: column; gap: 4px; }
 }
+
+/* SHADOW MD premium terminal + update controls */
+.admin-toolbar-actions { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+.update-bot-btn {
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  min-height:40px; padding:0 15px; color:#06110f;
+  background:linear-gradient(110deg,#00ffb3,#00d9ff);
+  border:1px solid rgba(0,255,210,.55); border-radius:9px;
+  box-shadow:0 0 22px rgba(0,234,255,.13), inset 0 1px rgba(255,255,255,.35);
+  font-size:9px; font-weight:900; letter-spacing:1px; cursor:pointer;
+  transition:transform .18s ease,filter .18s ease,box-shadow .18s ease;
+}
+.update-bot-btn:hover { transform:translateY(-1px); filter:brightness(1.08); box-shadow:0 0 25px rgba(0,234,255,.25); }
+.update-bot-btn:disabled { opacity:.65; cursor:wait; transform:none; }
+.update-bot-btn span { font-size:17px; line-height:1; }
+.update-bot-btn.is-loading span { animation:shadow-spin 1s linear infinite; }
+@keyframes shadow-spin { to { transform:rotate(360deg); } }
+.update-notice {
+  margin:12px 0; padding:13px 15px; border:1px solid rgba(0,234,255,.22);
+  border-radius:10px; color:#baf8f0; background:linear-gradient(110deg,rgba(0,234,255,.08),rgba(0,255,136,.045));
+  font-size:11px; line-height:1.6; overflow-wrap:anywhere;
+}
+.update-notice.is-success { color:#9effd1; border-color:rgba(0,255,136,.3); background:rgba(0,255,136,.07); }
+.update-notice.is-error { color:#ffb0b0; border-color:rgba(255,90,110,.32); background:rgba(255,60,80,.07); }
+.update-notice.is-loading { color:#a9efff; }
+.admin-filter-row select,
+.user-logs-tools select {
+  appearance:none; -webkit-appearance:none; cursor:pointer;
+  padding:0 38px 0 13px;
+  background-color:#07151b;
+  background-image:linear-gradient(45deg,transparent 50%,#00eaff 50%),linear-gradient(135deg,#00eaff 50%,transparent 50%),linear-gradient(to right,rgba(0,234,255,.16),rgba(0,234,255,.16));
+  background-position:calc(100% - 17px) 16px,calc(100% - 12px) 16px,calc(100% - 32px) 0;
+  background-size:5px 5px,5px 5px,1px 100%; background-repeat:no-repeat;
+  border:1px solid rgba(0,234,255,.23); border-radius:9px;
+  box-shadow:inset 0 0 16px rgba(0,234,255,.025);
+  transition:border-color .18s ease,box-shadow .18s ease;
+}
+.admin-filter-row select:focus,
+.user-logs-tools select:focus { outline:none; border-color:rgba(0,234,255,.7); box-shadow:0 0 0 3px rgba(0,234,255,.09); }
+.admin-filter-row option,
+.user-logs-tools option { color:#eaf7f4; background:#07151b; }
+.log-row, .user-log-row {
+  position:relative; overflow:hidden;
+  background:linear-gradient(115deg,rgba(8,24,31,.98),rgba(7,17,24,.96));
+  border:1px solid rgba(110,190,190,.16); border-left-width:3px;
+  border-radius:10px; box-shadow:0 8px 22px rgba(0,0,0,.12);
+}
+.log-row::after, .user-log-row::after {
+  content:""; position:absolute; top:0; right:0; width:75px; height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,234,255,.38));
+}
+.log-row.log-info, .user-log-row.log-info { border-left-color:#36c8e7; }
+.log-row-top, .user-log-top { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+.log-row-top strong, .user-log-top strong { color:#c7f4ed; font-size:9px; letter-spacing:.9px; }
+.log-row-top time, .user-log-top time { margin-left:auto; color:#79969c; font-size:8px; }
+.log-level-tag, .user-log-level {
+  display:inline-flex; align-items:center; padding:4px 7px; border-radius:5px;
+  color:#a6eaff; background:rgba(54,200,231,.1); border:1px solid rgba(54,200,231,.2);
+  font-size:7px; font-weight:900; letter-spacing:.8px;
+}
+.level-success { color:#8affc5; background:rgba(0,255,136,.09); border-color:rgba(0,255,136,.22); }
+.level-warn { color:#ffd18a; background:rgba(255,185,70,.09); border-color:rgba(255,185,70,.22); }
+.level-error { color:#ffaaaa; background:rgba(255,80,100,.09); border-color:rgba(255,80,100,.22); }
+.log-row p, .user-log-row p { color:#e2f4f2; line-height:1.65; }
+.log-row small, .user-log-row small { display:block; padding-top:5px; color:#79a09c; font-size:8px; letter-spacing:.35px; }
+.user-logs-card { background:linear-gradient(145deg,rgba(8,20,27,.96),rgba(5,13,19,.94)); border-color:rgba(0,234,255,.17); }
+.user-logs-tools { padding:10px; border:1px solid rgba(0,234,255,.12); border-radius:10px; background:rgba(0,0,0,.13); }
+.user-logs-tools label { color:#7ee8e0; }
+@media(max-width:520px) {
+  .admin-toolbar-actions { width:100%; }
+  .admin-toolbar-actions button { flex:1; }
+  .log-row-top time, .user-log-top time { width:100%; margin-left:0; }
+  .log-row-top, .user-log-top { align-items:flex-start; }
+}
