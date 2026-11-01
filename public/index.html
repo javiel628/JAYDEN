@@ -275,8 +275,13 @@
             <h2>Platform Overview</h2>
             <p>Live account, WhatsApp session and activity monitoring.</p>
           </div>
-          <button type="button" id="refreshSessions" class="copy-btn">REFRESH</button>
+          <div class="admin-toolbar-actions">
+            <button type="button" id="checkBotUpdates" class="update-bot-btn"><span aria-hidden="true">↻</span> UPDATE BOT</button>
+            <button type="button" id="refreshSessions" class="copy-btn">REFRESH</button>
+          </div>
         </div>
+
+        <p id="botUpdateMessage" class="update-notice" role="status" aria-live="polite" hidden></p>
 
         <div class="admin-stats admin-stats-wide">
           <div class="admin-stat"><span>REGISTERED USERS</span><strong id="totalUsers">0</strong></div>
@@ -322,7 +327,7 @@
 
     <footer>
       <div class="footer-brand">亗 SHADOW MD</div>
-      <p>Developed by <strong>𝐒𝚳𝚰𝐋𝚵 𝚳𝚯𝐃𝚯</strong></p>
+      <p>Developed by <strong> 𝐒𝚳𝚰𝐋𝚵 𝚳𝚯𝐃𝐙</strong></p>
       <small>© 2026 SHADOW MD. All rights reserved.</small>
 
       <button type="button" id="openAdmin" class="admin-open-btn">
