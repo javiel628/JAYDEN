@@ -18,6 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const refreshBtn = $('refreshSessions');
   const logoutBtn = $('adminLogout');
   const liveState = $('liveLogState');
+  const updateBotBtn = $('checkBotUpdates');
+  const updateMessage = $('botUpdateMessage');
   let stream = null;
   let allUsers = [];
   let allSessions = [];
@@ -186,20 +188,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const empty = logsList.querySelector('.empty-logs');
     if (empty) empty.remove();
     const row = document.createElement('article');
-    row.className = `log-row log-${event.level || 'info'}`;
+    const level = ['success', 'warn', 'error'].includes(event.level) ? event.level : 'info';
+    row.className = `log-row log-${level}`;
     const top = document.createElement('div');
     top.className = 'log-row-top';
     const type = document.createElement('strong');
-    type.textContent = String(event.type || 'event').toUpperCase();
+    const typeName = String(event.type || 'event').replace(/_/g, ' ').toUpperCase();
+    const icons = { connection: '◉', pairing: '⌁', command: '⚡', message: '✉', error: '⚠', admin: '◆' };
+    type.textContent = `${icons[String(event.type || '').toLowerCase()] || '✦'}  ${typeName}`;
     const time = document.createElement('time');
-    time.dateTime = event.at;
-    time.textContent = new Date(event.at).toLocaleString();
-    top.append(type, time);
+    time.dateTime = event.at || '';
+    const parsed = new Date(event.at);
+    time.textContent = Number.isNaN(parsed.getTime()) ? 'TIME UNKNOWN' : parsed.toLocaleString();
+    const levelTag = document.createElement('span');
+    levelTag.className = `log-level-tag level-${level}`;
+    levelTag.textContent = level.toUpperCase();
+    top.append(type, levelTag, time);
     const message = document.createElement('p');
-    message.textContent = event.message || '';
+    message.textContent = event.message || 'Activity recorded';
     const meta = document.createElement('small');
     const owner = allSessions.find((session) => session.id === event.sessionId);
-    meta.textContent = `${owner?.ownerEmail || event.sessionId} · ${event.level || 'info'}`;
+    meta.textContent = `ACCOUNT: ${owner?.ownerEmail || 'BOT SESSION'}  ·  SESSION: ${String(event.sessionId || '').slice(0, 12)}`;
     row.append(top, message, meta);
     if (atTop) logsList.prepend(row); else logsList.append(row);
     while (logsList.children.length > 150) logsList.lastElementChild.remove();
@@ -276,6 +285,33 @@ document.addEventListener('DOMContentLoaded', () => {
   $('logSessionFilter')?.addEventListener('change', () => { loadLogs(); startLiveLogs(); });
   $('refreshLogs')?.addEventListener('click', loadLogs);
   refreshBtn?.addEventListener('click', () => Promise.all([loadDashboard(), loadSessions(), loadUsers()]));
+
+  updateBotBtn?.addEventListener('click', async () => {
+    if (!confirm('Check GitHub for SHADOW MD updates and start a Render deployment if a newer version exists?')) return;
+    updateBotBtn.disabled = true;
+    updateBotBtn.classList.add('is-loading');
+    updateBotBtn.innerHTML = '<span aria-hidden="true">↻</span> CHECKING UPDATES…';
+    if (updateMessage) { updateMessage.hidden = false; updateMessage.className = 'update-notice is-loading'; updateMessage.textContent = 'Checking the SHADOW MD GitHub repository…'; }
+    try {
+      const data = await api('/api/admin/updates/check', { method: 'POST' });
+      const upToDate = data.status === 'up-to-date';
+      if (updateMessage) {
+        updateMessage.hidden = false;
+        updateMessage.className = `update-notice ${upToDate ? 'is-success' : 'is-loading'}`;
+        updateMessage.textContent = data.message || 'Update check completed.';
+      }
+    } catch (error) {
+      if (updateMessage) {
+        updateMessage.hidden = false;
+        updateMessage.className = 'update-notice is-error';
+        updateMessage.textContent = error.message || 'Could not check for updates.';
+      }
+    } finally {
+      updateBotBtn.disabled = false;
+      updateBotBtn.classList.remove('is-loading');
+      updateBotBtn.innerHTML = '<span aria-hidden="true">↻</span> UPDATE BOT';
+    }
+  });
 
   logoutBtn?.addEventListener('click', async () => {
     try {
