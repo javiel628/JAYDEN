@@ -2,7 +2,7 @@
   "name": "shadow-md-pair",
   "version": "1.1.0",
   "private": true,
-  "description": "SHADOW MD WhatsApp bot with integrated SHADOW PAIR web portal",
+  "description": "SHADOW MD multi-user WhatsApp bot hosting platform with private account dashboard",
   "main": "backend/server.js",
   "type": "commonjs",
   "scripts": {
@@ -13,7 +13,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.18",
+    "@whiskeysockets/baileys": "^7.0.0-rc.9",
     "chalk": "^4.1.2",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
