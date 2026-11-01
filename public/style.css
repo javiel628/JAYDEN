@@ -1033,3 +1033,95 @@ footer small {
   .delete-session-btn { width: 100%; }
   .log-row-top { align-items: flex-start; flex-direction: column; gap: 4px; }
 }
+
+/* SHADOW MD — private per-user activity logs */
+.user-logs-card {
+  margin: 14px 0;
+  padding: 18px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  box-shadow: 0 12px 40px rgba(0,0,0,.2);
+}
+.user-logs-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.user-logs-heading h2 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  letter-spacing: .5px;
+}
+.user-logs-heading p {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+.user-logs-live {
+  display: inline-block;
+  margin-left: 5px;
+  color: #e8ae53;
+  font-size: 8px;
+  vertical-align: middle;
+}
+.user-logs-live.is-live { color: var(--green); }
+.user-logs-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 15px 0 10px;
+}
+.user-logs-tools label {
+  color: #a7c5b8;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.user-logs-tools select {
+  min-width: 150px;
+  height: 36px;
+  padding: 0 10px;
+  color: #eaf7f4;
+  background: #081318;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 10px;
+}
+.user-logs-status {
+  padding: 10px 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+.user-logs-list { display: grid; gap: 8px; }
+.user-log-row {
+  padding: 11px;
+  background: rgba(10,25,30,.9);
+  border: 1px solid rgba(110,150,140,.16);
+  border-left: 3px solid #71918a;
+  border-radius: 8px;
+}
+.user-log-row.log-success { border-left-color: var(--green); }
+.user-log-row.log-warn { border-left-color: #e8ae53; }
+.user-log-row.log-error { border-left-color: #ff6d6d; }
+.user-log-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.user-log-top strong { color: #b8d0ca; font-size: 9px; letter-spacing: .8px; }
+.user-log-top time { color: #718983; font-size: 9px; }
+.user-log-row p { margin: 7px 0; color: #e2eeeb; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.user-log-row small { color: #78918a; font-size: 9px; }
+.user-logs-note { margin-top: 12px; color: #718983; font-size: 9px; line-height: 1.5; }
+@media(max-width: 380px) {
+  .user-logs-card { padding: 14px; }
+  .user-logs-heading { align-items: flex-start; }
+  .user-logs-heading h2 { font-size: 13px; }
+  .user-log-top { align-items: flex-start; flex-direction: column; gap: 4px; }
+}
