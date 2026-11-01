@@ -28,10 +28,11 @@ const path = require('path');
 function createSessionSettings(sessionId, defaultPrefix) {
     // Lives inside the session folder on purpose: whoever keeps `session/` when updating the panel keeps
     // every user's customisation (sudo, bans, antilink, bot name...) together with their WhatsApp login.
-    const dir = path.join(process.cwd(), 'session', sessionId);
+    const storageRoot = process.env.SHADOW_DATA_DIR || process.cwd();
+    const dir = path.join(storageRoot, 'session', sessionId);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const file = path.join(dir, 'bot-settings.json');
-    const legacy = path.join(process.cwd(), 'data', 'sessions', sessionId, 'settings.json'); // old location
+    const legacy = path.join(storageRoot, 'data', 'sessions', sessionId, 'settings.json'); // old location
     if (!fs.existsSync(file) && fs.existsSync(legacy)) {
         try { fs.copyFileSync(legacy, file); } catch { /* start fresh */ }
     }
