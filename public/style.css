@@ -870,7 +870,7 @@ footer small {
 /* SHADOW MD user account portal */
 .account-card { margin-top: 28px; }
 .account-card input { width: 100%; box-sizing: border-box; margin: 8px 0 16px; }
-.account-card #accountMessage { min-height: 22px; color: #ffb5b5; font-size: 13px; }
+.account-card #accountMessage { min-height: 22px; color: #a7c5b8; font-size: 13px; }
 .account-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 18px; color: #dce7ef; font-size: 13px; overflow-wrap: anywhere; }
 #userSessionCard { margin-bottom: 18px; }
 
@@ -1199,3 +1199,8 @@ footer small {
   .log-row-top time, .user-log-top time { width:100%; margin-left:0; }
   .log-row-top, .user-log-top { align-items:flex-start; }
 }
+
+/* Account form feedback and safe double-submit prevention */
+.account-card #accountMessage.is-error { color: #ff8585; }
+.account-card button:disabled { opacity: .58; cursor: not-allowed; filter: saturate(.65); }
+.account-card input:invalid:not(:focus):not(:placeholder-shown) { border-color: rgba(255, 110, 110, .65); }
