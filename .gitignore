@@ -5,3 +5,7 @@ data/*.db
 .env
 *.log
 .vf-state.json
+# Private multi-user account database and signing key
+data/users.json
+data/.user-auth-secret
+runtime-data/
