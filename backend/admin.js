@@ -20,6 +20,8 @@ const {
 } = require('../src/session');
 
 const router = express.Router();
+const activityLog = require('../src/lib/activity-log');
+const userAuth = require('./users');
 
 const STORAGE_ROOT = process.env.SHADOW_DATA_DIR || process.cwd();
 const AUTH_ROOT = path.join(STORAGE_ROOT, 'session');
@@ -208,6 +210,69 @@ router.post('/logout', requireAdmin, (_req, res) => {
   });
 });
 
+// Dashboard overview: account and connection totals.
+router.get('/overview', requireAdmin, (_req, res) => {
+  const users = userAuth.listUsers();
+  const sessionIds = listSavedSessionIds().filter(validSessionId);
+  const sessions = sessionIds.map((id) => ({ id, connected: Boolean(isConnected(id)) }));
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    ok: true,
+    totalUsers: users.length,
+    totalSessions: sessions.length,
+    connected: sessions.filter((item) => item.connected).length,
+    offline: sessions.filter((item) => !item.connected).length,
+    uptimeSeconds: Math.floor(process.uptime()),
+  });
+});
+
+// List registered accounts without exposing password hashes or auth data.
+router.get('/users', requireAdmin, (_req, res) => {
+  const users = userAuth.listUsers().map((user) => ({
+    id: user.id, email: user.email, createdAt: user.createdAt,
+    hasSession: Boolean(user.sessionId),
+    connected: Boolean(user.sessionId && isConnected(user.sessionId)),
+  }));
+  res.set('Cache-Control', 'no-store');
+  res.json({ ok: true, total: users.length, users });
+});
+
+// Read persisted bot activity. Message bodies and private chat contents are never logged.
+router.get('/logs', requireAdmin, (req, res) => {
+  const limit = Math.max(1, Math.min(Number(req.query.limit) || 100, 300));
+  const sessionId = String(req.query.sessionId || '');
+  const level = String(req.query.level || '');
+  if (sessionId && !validSessionId(sessionId)) {
+    return res.status(400).json({ ok: false, error: 'Invalid session filter.' });
+  }
+  if (level && !['info', 'success', 'warn', 'error'].includes(level)) {
+    return res.status(400).json({ ok: false, error: 'Invalid log level.' });
+  }
+  res.set('Cache-Control', 'no-store');
+  res.json({ ok: true, logs: activityLog.readEvents({ limit, sessionId, level }) });
+});
+
+// Live log stream. Admin cookie is checked before the stream is opened.
+router.get('/logs/stream', requireAdmin, (req, res) => {
+  res.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.flushHeaders?.();
+  res.write(': SHADOW MD live log stream connected\n\n');
+  const sessionId = String(req.query.sessionId || '');
+  const level = String(req.query.level || '');
+  const unsubscribe = activityLog.subscribe((event) => {
+    if (sessionId && event.sessionId !== sessionId) return;
+    if (level && event.level !== level) return;
+    res.write(`data: ${JSON.stringify(event)}\n\n`);
+  });
+  const heartbeat = setInterval(() => res.write(': keepalive\n\n'), 20000);
+  res.on('close', () => { clearInterval(heartbeat); unsubscribe(); });
+});
+
 // List saved web pairing sessions.
 router.get('/sessions', requireAdmin, (_req, res) => {
   try {
@@ -218,6 +283,7 @@ router.get('/sessions', requireAdmin, (_req, res) => {
       id,
       number: getPhoneNumber(id),
       connected: Boolean(isConnected(id)),
+      ownerEmail: userAuth.findUserBySession(id)?.email || 'Unassigned',
     }));
 
     res.json({
@@ -258,6 +324,9 @@ router.delete('/sessions/:id', requireAdmin, async (req, res) => {
     }
 
     await removeSession(sessionId);
+    const owner = userAuth.findUserBySession(sessionId);
+    if (owner) userAuth.clearSession(owner.id, sessionId);
+    activityLog.writeEvent(sessionId, 'admin', 'Session deleted by administrator', 'warn');
 
     // Remove remaining files if the session manager left the directory.
     fs.rmSync(sessionPath, {
