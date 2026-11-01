@@ -334,16 +334,26 @@ copyBtn.addEventListener('click', async () => {
       ? 'NEW HERE? CREATE AN ACCOUNT'
       : 'ALREADY HAVE AN ACCOUNT? LOG IN';
     accountMessage.textContent = '';
+    accountMessage.classList.remove('is-error');
   }
 
   async function api(url, options = {}) {
-    const response = await fetch(url, {
-      credentials: 'same-origin',
-      ...options,
-      headers: { ...(options.headers || {}) }
-    });
+    let response;
+    try {
+      response = await fetch(url, {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        ...options,
+        headers: { ...(options.headers || {}) }
+      });
+    } catch {
+      throw new Error('Could not reach SHADOW MD. Check your internet connection and try again.');
+    }
     const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data.ok) throw new Error(data.error || 'Request failed.');
+    if (!response.ok || !data.ok) {
+      if (response.status >= 500) throw new Error(data.error || 'The server is temporarily unavailable. Please try again.');
+      throw new Error(data.error || 'Request failed. Please check your details and try again.');
+    }
     return data;
   }
 
@@ -384,10 +394,20 @@ copyBtn.addEventListener('click', async () => {
 
   accountForm.addEventListener('submit', async (event) => {
     event.preventDefault();
-    accountSubmit.disabled = true;
-    accountMessage.textContent = accountMode === 'register' ? 'Creating your account…' : 'Signing you in…';
-    const email = document.getElementById('accountEmail').value.trim();
+    if (!accountForm.reportValidity()) return;
+
+    const email = document.getElementById('accountEmail').value.trim().toLowerCase();
     const password = document.getElementById('accountPassword').value;
+    if (accountMode === 'register' && (password.length < 10 || password.length > 128)) {
+      accountMessage.textContent = 'Your password must be between 10 and 128 characters.';
+      accountMessage.classList.add('is-error');
+      return;
+    }
+
+    accountSubmit.disabled = true;
+    switchMode.disabled = true;
+    accountMessage.textContent = accountMode === 'register' ? 'Creating your account…' : 'Signing you in…';
+    accountMessage.classList.remove('is-error');
     try {
       const data = await api(`/api/auth/${accountMode}`, {
         method: 'POST',
@@ -396,9 +416,11 @@ copyBtn.addEventListener('click', async () => {
       });
       await showDashboard(data.user);
     } catch (err) {
-      accountMessage.textContent = err.message;
+      accountMessage.textContent = err.message || 'Something went wrong. Please try again.';
+      accountMessage.classList.add('is-error');
     } finally {
       accountSubmit.disabled = false;
+      switchMode.disabled = false;
     }
   });
 
