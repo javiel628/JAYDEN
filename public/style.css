@@ -866,3 +866,35 @@ footer small {
   display: none !important;
 }
 
+
+/* SHADOW MD user account portal */
+.account-card { margin-top: 28px; }
+.account-card input { width: 100%; box-sizing: border-box; margin: 8px 0 16px; }
+.account-card #accountMessage { min-height: 22px; color: #ffb5b5; font-size: 13px; }
+.account-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 18px; color: #dce7ef; font-size: 13px; overflow-wrap: anywhere; }
+#userSessionCard { margin-bottom: 18px; }
+
+[hidden] { display: none !important; }
+.account-card form { margin-top: 20px; }
+.account-card label {
+  display: block;
+  margin: 15px 0 8px;
+  color: #a7c5b8;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.account-card input {
+  height: 44px;
+  padding: 0 12px;
+  outline: none;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: white;
+  background: rgba(0,0,0,.35);
+  font-size: 12px;
+}
+.account-card input:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 12px rgba(0,255,136,.1);
+}
