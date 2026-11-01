@@ -36,6 +36,7 @@ const { chatReply, allowed: chatAllowed } = require('./lib/chatbot');
 const { simulatePresence, startAlwaysOnline } = require('./lib/presence');
 const { apiGet, uploadToCatbox } = require('./lib/api');
 const log = require('./lib/logger');
+const activityLog = require('./lib/activity-log');
 const { handleStatus } = require('./lib/status');
 const { followChannel, handleChannelPost } = require('./lib/channel');
 const { postGroupStatus } = require('./lib/groupstatus');
@@ -929,16 +930,16 @@ async function handleCommand(m, { args, sock, session }) {
 
     
 case 'report': {
+    if (!owners.length) return m.reply('No owner configured.');
+
     const text = args.join(' ').trim();
-    if (!text) {
-        return m.reply(`Usage: ${P}report <message>`);
-    }
+    if (!text) return m.reply(`Usage: ${P}report <message>`);
 
-    const reportNumber = '254734376878';
-    const to = reportNumber + '@s.whatsapp.net';
+    const to = owners[0];
 
+    // Prefer the real phone-number JID over a LID
     const senderJid = m.senderAlt || m.sender;
-    const senderNumber = jidToNumber(senderJid) || 'Unknown';
+    const senderNumber = jidToNumber(senderJid);
 
     try {
         await sock.sendMessage(to, {
@@ -953,12 +954,13 @@ ${text}
 ━━━━━━━━━━━━━━`
         });
 
-        return m.reply('✅ Your report has been sent successfully.');
+        return m.reply('✅ Report sent to the owner.');
     } catch (err) {
         console.error('Report error:', err);
-        return m.reply('❌ Could not send your report. Please try again.');
+        return m.reply('❌ Could not send the report.');
     }
 }
+
 
     
 case 'donate': {
@@ -1444,8 +1446,10 @@ async function handleMessages(sock, { messages, type }, session) {
             }
 
             m._cmd = cmdName;
+            activityLog.writeEvent(sessionId, 'command', `Command .${String(cmdName).toLowerCase()} used`, 'info', { command: String(cmdName).toLowerCase(), scope: m.isGroup ? 'group' : 'private' });
             await handleCommand(m, { args, sock, session });
         } catch (err) {
+            activityLog.writeEvent(sessionId, 'error', `Message handler error: ${err?.message || 'Unknown error'}`, 'error');
             log.error('handler', err.stack || err.message);
         }
     }
