@@ -73,6 +73,30 @@
         <button type="button" id="disconnectSession" class="copy-btn">DISCONNECT WHATSAPP</button>
       </section>
 
+      <section id="userLogsCard" class="user-logs-card" aria-labelledby="userLogsTitle">
+        <div class="user-logs-heading">
+          <div>
+            <div class="eyebrow">YOUR BOT ACTIVITY</div>
+            <h2 id="userLogsTitle">MY BOT LOGS <span id="userLogsLive" class="user-logs-live">● WAITING</span></h2>
+            <p>Private activity history for your WhatsApp bot.</p>
+          </div>
+          <button type="button" id="refreshUserLogs" class="copy-btn">REFRESH</button>
+        </div>
+        <div class="user-logs-tools">
+          <label for="userLogLevel">FILTER</label>
+          <select id="userLogLevel">
+            <option value="all">All activity</option>
+            <option value="success">Success</option>
+            <option value="info">Information</option>
+            <option value="warn">Warnings</option>
+            <option value="error">Errors</option>
+          </select>
+        </div>
+        <p id="userLogsStatus" class="user-logs-status" role="status" aria-live="polite">Sign in to view your bot activity.</p>
+        <div id="userLogsList" class="user-logs-list" aria-live="polite"></div>
+        <p class="user-logs-note">For privacy, message contents and private chats are not displayed.</p>
+      </section>
+
       <section class="welcome">
         <div class="eyebrow">WHATSAPP CONNECTION SYSTEM</div>
         <h1>SHADOW <span>MD</span></h1>
