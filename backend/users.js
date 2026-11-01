@@ -14,13 +14,27 @@ const COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
 fs.mkdirSync(USER_DIR, { recursive: true });
 
 function loadSecret() {
-  if (process.env.USER_AUTH_SECRET) return process.env.USER_AUTH_SECRET;
+  const configured = String(process.env.USER_AUTH_SECRET || '').trim();
+  if (configured) return configured;
+
   try {
-    return fs.readFileSync(SECRET_FILE, 'utf8').trim();
-  } catch {
-    const secret = crypto.randomBytes(48).toString('hex');
+    const existing = fs.readFileSync(SECRET_FILE, 'utf8').trim();
+    if (existing) return existing;
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+
+  const secret = crypto.randomBytes(48).toString('hex');
+  try {
     fs.writeFileSync(SECRET_FILE, secret, { mode: 0o600, flag: 'wx' });
     return secret;
+  } catch (err) {
+    // Another process may have created the secret during startup.
+    if (err.code === 'EEXIST') {
+      const existing = fs.readFileSync(SECRET_FILE, 'utf8').trim();
+      if (existing) return existing;
+    }
+    throw err;
   }
 }
 const AUTH_SECRET = loadSecret();
@@ -29,15 +43,32 @@ function readStore() {
   try {
     const value = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
     if (value && Array.isArray(value.users)) return value;
-  } catch {}
-  return { users: [] };
+    throw new Error('Invalid account database format.');
+  } catch (err) {
+    if (err.code === 'ENOENT') return { users: [] };
+    // Never silently replace a damaged account database with an empty one.
+    throw new Error(`Could not read the SHADOW MD account database: ${err.message}`);
+  }
 }
 
 let store = readStore();
-function saveStore() {
-  const temp = `${USERS_FILE}.${process.pid}.tmp`;
-  fs.writeFileSync(temp, JSON.stringify(store, null, 2), { mode: 0o600 });
-  fs.renameSync(temp, USERS_FILE);
+function saveStore(nextStore = store) {
+  const temp = `${USERS_FILE}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+  let fd;
+  try {
+    fd = fs.openSync(temp, 'wx', 0o600);
+    fs.writeFileSync(fd, JSON.stringify(nextStore, null, 2), 'utf8');
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+    fd = null;
+    fs.renameSync(temp, USERS_FILE);
+  } catch (err) {
+    if (fd !== undefined && fd !== null) {
+      try { fs.closeSync(fd); } catch {}
+    }
+    try { fs.unlinkSync(temp); } catch {}
+    throw err;
+  }
 }
 
 function normalizeEmail(value) {
@@ -51,11 +82,15 @@ function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
   return `scrypt$${salt}$${hash}`;
 }
 function verifyPassword(password, stored) {
-  const [scheme, salt, expected] = String(stored || '').split('$');
-  if (scheme !== 'scrypt' || !salt || !expected) return false;
-  const actual = crypto.scryptSync(password, salt, 64);
-  const target = Buffer.from(expected, 'hex');
-  return actual.length === target.length && crypto.timingSafeEqual(actual, target);
+  try {
+    const [scheme, salt, expected] = String(stored || '').split('$');
+    if (scheme !== 'scrypt' || !salt || !/^[a-f0-9]{128}$/i.test(expected || '')) return false;
+    const actual = crypto.scryptSync(password, salt, 64);
+    const target = Buffer.from(expected, 'hex');
+    return actual.length === target.length && crypto.timingSafeEqual(actual, target);
+  } catch {
+    return false;
+  }
 }
 function sign(value) {
   return crypto.createHmac('sha256', AUTH_SECRET).update(value).digest('hex');
@@ -111,19 +146,22 @@ function register(emailValue, password) {
     createdAt: new Date().toISOString(),
     sessionId: null,
   };
-  store.users.push(user);
-  saveStore();
+  const nextStore = { ...store, users: [...store.users, user] };
+  saveStore(nextStore);
+  store = nextStore;
   return user;
 }
 function authenticate(emailValue, password) {
   const email = normalizeEmail(emailValue);
+  const safePassword = typeof password === 'string' && password.length <= 128 ? password : '';
   const user = store.users.find((item) => item.email === email);
   // Perform a scrypt operation for unknown emails too, reducing timing differences.
   if (!user) {
-    hashPassword(String(password || ''), 'shadow-md-fixed-dummy-salt');
+    hashPassword(safePassword, 'shadow-md-fixed-dummy-salt');
     return null;
   }
-  return verifyPassword(String(password || ''), user.passwordHash) ? user : null;
+  if (!safePassword && password !== '') return null;
+  return verifyPassword(safePassword, user.passwordHash) ? user : null;
 }
 function getUserById(id) {
   return store.users.find((user) => user.id === id) || null;
@@ -131,15 +169,23 @@ function getUserById(id) {
 function setSession(userId, sessionId) {
   const user = getUserById(userId);
   if (!user) throw new Error('Account not found.');
-  user.sessionId = sessionId;
-  saveStore();
+  const nextStore = {
+    ...store,
+    users: store.users.map((item) => item.id === userId ? { ...item, sessionId } : item),
+  };
+  saveStore(nextStore);
+  store = nextStore;
 }
 function clearSession(userId, expectedSessionId) {
   const user = getUserById(userId);
   if (!user) return;
   if (!expectedSessionId || user.sessionId === expectedSessionId) {
-    user.sessionId = null;
-    saveStore();
+    const nextStore = {
+      ...store,
+      users: store.users.map((item) => item.id === userId ? { ...item, sessionId: null } : item),
+    };
+    saveStore(nextStore);
+    store = nextStore;
   }
 }
 function findUserBySession(sessionId) {
