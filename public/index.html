@@ -246,46 +246,59 @@
 
       <!-- ADMIN CONTENT -->
       <div id="adminDashboard" hidden>
-
         <div class="admin-toolbar">
           <div>
-            <h2>Paired Sessions</h2>
-            <p>WhatsApp accounts connected through this portal.</p>
+            <h2>Platform Overview</h2>
+            <p>Live account, WhatsApp session and activity monitoring.</p>
           </div>
-
-          <button type="button" id="refreshSessions" class="copy-btn">
-            REFRESH
-          </button>
+          <button type="button" id="refreshSessions" class="copy-btn">REFRESH</button>
         </div>
 
-        <div class="admin-stats">
-          <div class="admin-stat">
-            <span>TOTAL SESSIONS</span>
-            <strong id="totalSessions">0</strong>
-          </div>
-
-          <div class="admin-stat">
-            <span>CONNECTED</span>
-            <strong id="connectedSessions">0</strong>
-          </div>
+        <div class="admin-stats admin-stats-wide">
+          <div class="admin-stat"><span>REGISTERED USERS</span><strong id="totalUsers">0</strong></div>
+          <div class="admin-stat"><span>BOT SESSIONS</span><strong id="totalSessions">0</strong></div>
+          <div class="admin-stat"><span>CONNECTED</span><strong id="connectedSessions">0</strong></div>
+          <div class="admin-stat"><span>OFFLINE</span><strong id="offlineSessions">0</strong></div>
         </div>
 
-        <p id="sessionsMessage" role="status"></p>
+        <nav class="admin-tabs" aria-label="Admin sections">
+          <button type="button" class="admin-tab active" data-admin-tab="sessions">SESSIONS</button>
+          <button type="button" class="admin-tab" data-admin-tab="users">USERS</button>
+          <button type="button" class="admin-tab" data-admin-tab="logs">LIVE LOGS <span id="liveLogState" class="live-state">● LIVE</span></button>
+        </nav>
 
-        <div id="sessionsList" class="sessions-list">
-          <p>Loading sessions...</p>
-        </div>
+        <section class="admin-panel" data-admin-panel="sessions">
+          <div class="admin-panel-heading"><div><h2>WhatsApp Sessions</h2><p>Connection status and account ownership.</p></div></div>
+          <p id="sessionsMessage" role="status"></p>
+          <div id="sessionsList" class="sessions-list"><p>Loading sessions...</p></div>
+        </section>
 
-        <button type="button" id="adminLogout" class="copy-btn">
-          LOG OUT
-        </button>
+        <section class="admin-panel" data-admin-panel="users" hidden>
+          <div class="admin-panel-heading"><div><h2>Registered Users</h2><p>Account overview. Passwords and private credentials are never displayed.</p></div></div>
+          <div class="admin-filter-row"><input id="userSearch" type="search" placeholder="Search email address" aria-label="Search users"></div>
+          <div id="usersList" class="sessions-list"><p>Loading users...</p></div>
+        </section>
 
+        <section class="admin-panel" data-admin-panel="logs" hidden>
+          <div class="admin-panel-heading"><div><h2>Bot Activity Logs</h2><p>Live connection, pairing, command and error events. Message contents are not stored.</p></div><button type="button" id="refreshLogs" class="copy-btn">REFRESH LOGS</button></div>
+          <div class="admin-filter-row">
+            <select id="logLevelFilter" aria-label="Filter log level">
+              <option value="">All event levels</option><option value="success">Success</option><option value="info">Info</option><option value="warn">Warnings</option><option value="error">Errors</option>
+            </select>
+            <select id="logSessionFilter" aria-label="Filter by bot session"><option value="">All bot sessions</option></select>
+          </div>
+          <div id="logsList" class="logs-list"><p>Loading activity logs...</p></div>
+        </section>
+
+        <p id="sessionsMessageBottom" class="admin-message" role="status"></p>
+        <button type="button" id="adminLogout" class="copy-btn">LOG OUT</button>
       </div>
+
     </section>
 
     <footer>
       <div class="footer-brand">亗 SHADOW MD</div>
-      <p>Developed by <strong> 𝐒𝚳𝚰𝐋𝚵 𝚳𝚯𝐃𝐙</strong></p>
+      <p>Developed by <strong>𝐒𝚳𝚰𝐋𝚵 𝚳𝚯𝐃𝚯</strong></p>
       <small>© 2026 SHADOW MD. All rights reserved.</small>
 
       <button type="button" id="openAdmin" class="admin-open-btn">
