@@ -20,7 +20,8 @@ const {
     startSession,
     removeSession,
     isConnected,
-    listSavedSessionIds
+    listSavedSessionIds,
+    shutdownSessions
 } = require('../src/session');
 
 const adminRouter = require('./admin');
@@ -412,11 +413,31 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
     await restoreSessions();
 });
 
-// Graceful shutdown.
-process.on('SIGTERM', () => {
-    console.log('[SHADOW PAIR] Shutting down...');
+// Graceful shutdown. Close sockets without logging out or deleting auth files.
+let shuttingDown = false;
+async function gracefulShutdown(signal) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+
+    console.log(`[SHADOW PAIR] ${signal} received; closing sessions safely...`);
+
+    const forceExit = setTimeout(() => {
+        console.error('[SHADOW PAIR] Shutdown timed out; exiting.');
+        process.exit(1);
+    }, 15000);
+    forceExit.unref();
+
+    try {
+        await shutdownSessions();
+    } catch (err) {
+        console.error('[SHADOW PAIR] Session shutdown warning:', err?.message || err);
+    }
 
     server.close(() => {
+        clearTimeout(forceExit);
         process.exit(0);
     });
-});
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
