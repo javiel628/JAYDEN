@@ -46,6 +46,12 @@ const { createSessionSettings } = require('./lib/settings');
 const log = require('./lib/logger');
 const activityLog = require('./lib/activity-log');
 
+const {
+    useMongoAuthState,
+    listMongoSessionIds,
+    deleteMongoSession,
+} = require('./lib/mongo-auth-state');
+
 // Persistent storage
 const STORAGE_ROOT = process.env.SHADOW_DATA_DIR || process.cwd();
 
