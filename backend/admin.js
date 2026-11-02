@@ -211,9 +211,9 @@ router.post('/logout', requireAdmin, (_req, res) => {
 });
 
 // Dashboard overview: account and connection totals.
-router.get('/overview', requireAdmin, (_req, res) => {
+router.get('/overview', requireAdmin, async (_req, res) => {
   const users = userAuth.listUsers();
-  const sessionIds = listSavedSessionIds().filter(validSessionId);
+  const sessionIds = (await listSavedSessionIds()).filter(validSessionId);
   const sessions = sessionIds.map((id) => ({ id, connected: Boolean(isConnected(id)) }));
   res.set('Cache-Control', 'no-store');
   res.json({
@@ -343,9 +343,9 @@ router.post('/updates/check', requireAdmin, async (_req, res) => {
 });
 
 // List saved web pairing sessions.
-router.get('/sessions', requireAdmin, (_req, res) => {
+router.get('/sessions', requireAdmin, async (_req, res) => {
   try {
-    const sessionIds = listSavedSessionIds()
+    const sessionIds = (await listSavedSessionIds())
       .filter(validSessionId);
 
     const sessions = sessionIds.map((id) => ({
