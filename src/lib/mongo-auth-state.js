@@ -1,207 +1,96 @@
 'use strict';
 
+// MongoDB-backed Baileys auth state with a local-file fallback for migration.
+// Set MONGODB_URI and optionally MONGODB_DB in the environment.
 const { MongoClient } = require('mongodb');
-const {
-    BufferJSON,
-    initAuthCreds,
-    proto,
-} = require('./baileys');
+const { BufferJSON, initAuthCreds } = require('@whiskeysockets/baileys');
 
-let clientPromise;
+const uri = process.env.MONGODB_URI;
+if (!uri) throw new Error('MONGODB_URI is required for MongoDB auth storage');
 
-function getCollection() {
-    if (!process.env.MONGODB_URI) {
-        throw new Error('MONGODB_URI is missing');
-    }
-
-    if (!clientPromise) {
-        const client = new MongoClient(process.env.MONGODB_URI);
-        clientPromise = client.connect().then(() => client);
-    }
-
-    return clientPromise.then((client) =>
-        client
-            .db(process.env.MONGODB_DB || 'shadow_md')
-            .collection('baileys_auth')
-    );
+const client = new MongoClient(uri);
+let connectPromise;
+async function collection() {
+  if (!connectPromise) connectPromise = client.connect();
+  await connectPromise;
+  const db = client.db(process.env.MONGODB_DB || 'shadow_md');
+  const coll = db.collection('baileys_auth');
+  await coll.createIndex({ sessionId: 1, kind: 1, keyType: 1, keyId: 1 });
+  return coll;
 }
 
-const encode = (value) =>
-    JSON.stringify(value, BufferJSON.replacer);
+function encode(value) {
+  return JSON.parse(JSON.stringify(value, BufferJSON.replacer));
+}
+function decode(value) {
+  return JSON.parse(JSON.stringify(value), BufferJSON.reviver);
+}
 
-const decode = (value) =>
-    value ? JSON.parse(value, BufferJSON.reviver) : null;
-
-/**
- * MongoDB auth state with local-file fallback.
- * Local keys are copied into MongoDB when Baileys requests them.
- */
 async function useMongoAuthState(sessionId, localAuth) {
-    const collection = await getCollection();
+  const coll = await collection();
+  const credsDoc = await coll.findOne({ sessionId, kind: 'creds' });
+  const creds = credsDoc ? decode(credsDoc.value) : localAuth.state.creds;
 
-    async function readCreds() {
-        const doc = await collection.findOne({
-            sessionId,
-            kind: 'creds',
-        });
-
-        if (doc?.payload) {
-            return decode(doc.payload);
-        }
-
-        // Keep an existing local login if MongoDB is empty.
-        const creds = localAuth?.state?.creds || initAuthCreds();
-
-        await collection.updateOne(
-            { sessionId, kind: 'creds' },
-            { $set: { payload: encode(creds) } },
-            { upsert: true }
-        );
-
-        return creds;
-    }
-
-    const creds = await readCreds();
-
-    const keys = {
-        async get(type, ids) {
-            const docs = await collection.find({
-                sessionId,
-                kind: 'key',
-                type,
-                keyId: { $in: ids },
-            }).toArray();
-
-            const result = {};
-
-            for (const doc of docs) {
-                result[doc.keyId] = decode(doc.payload);
-            }
-
-            const missing = ids.filter(
-                (id) => result[id] === undefined
+  const keys = {
+    async get(type, ids) {
+      const result = {};
+      const missing = [];
+      for (const id of ids) {
+        const doc = await coll.findOne({ sessionId, kind: 'key', keyType: type, keyId: id });
+        if (doc) result[id] = decode(doc.value);
+        else missing.push(id);
+      }
+      if (missing.length && localAuth?.state?.keys?.get) {
+        const legacy = await localAuth.state.keys.get(type, missing);
+        for (const id of missing) {
+          if (legacy && legacy[id] !== undefined) {
+            result[id] = legacy[id];
+            await coll.updateOne(
+              { sessionId, kind: 'key', keyType: type, keyId: id },
+              { $set: { value: encode(legacy[id]) } },
+              { upsert: true }
             );
-
-            // Migrate missing keys from the old local auth folder.
-            if (missing.length && localAuth?.state?.keys) {
-                const localValues = await localAuth.state.keys.get(
-                    type,
-                    missing
-                );
-
-                for (const id of missing) {
-                    const value = localValues?.[id];
-
-                    if (value == null) continue;
-
-                    result[id] = value;
-
-                    await collection.updateOne(
-                        {
-                            sessionId,
-                            kind: 'key',
-                            type,
-                            keyId: id,
-                        },
-                        {
-                            $set: { payload: encode(value) },
-                        },
-                        { upsert: true }
-                    );
-                }
-            }
-
-            if (type === 'app-state-sync-key') {
-                for (const id of ids) {
-                    if (result[id]) {
-                        result[id] =
-                            proto.Message.AppStateSyncKeyData.fromObject(
-                                result[id]
-                            );
-                    }
-                }
-            }
-
-            return result;
-        },
-
-        async set(data) {
-            for (const type of Object.keys(data)) {
-                for (const id of Object.keys(data[type])) {
-                    const value = data[type][id];
-
-                    if (value == null) {
-                        await collection.deleteOne({
-                            sessionId,
-                            kind: 'key',
-                            type,
-                            keyId: id,
-                        });
-                    } else {
-                        await collection.updateOne(
-                            {
-                                sessionId,
-                                kind: 'key',
-                                type,
-                                keyId: id,
-                            },
-                            {
-                                $set: { payload: encode(value) },
-                            },
-                            { upsert: true }
-                        );
-                    }
-                }
-            }
-
-            // Also update local files while migrating.
-            if (localAuth?.state?.keys) {
-                await localAuth.state.keys.set(data);
-            }
-        },
-    };
-
-    async function saveCreds() {
-        await collection.updateOne(
-            { sessionId, kind: 'creds' },
-            { $set: { payload: encode(creds) } },
-            { upsert: true }
-        );
-
-        // Keep the existing local session current during migration.
-        if (localAuth?.saveCreds) {
-            await localAuth.saveCreds();
+          }
         }
-    }
+      }
+      return result;
+    },
+    async set(data) {
+      const ops = [];
+      for (const [type, entries] of Object.entries(data || {})) {
+        for (const [id, value] of Object.entries(entries || {})) {
+          const filter = { sessionId, kind: 'key', keyType: type, keyId: id };
+          if (value == null) ops.push({ deleteOne: { filter } });
+          else ops.push({ updateOne: { filter, update: { $set: { value: encode(value) } }, upsert: true } });
+        }
+      }
+      if (ops.length) await coll.bulkWrite(ops);
+    },
+  };
 
-    return {
-        state: { creds, keys },
-        saveCreds,
-    };
+  const state = { creds: creds || initAuthCreds(), keys };
+  async function saveCreds() {
+    await coll.updateOne(
+      { sessionId, kind: 'creds' },
+      { $set: { value: encode(state.creds), updatedAt: new Date() } },
+      { upsert: true }
+    );
+    // Keep legacy local credentials updated during transition too.
+    if (localAuth?.saveCreds) await localAuth.saveCreds();
+  }
+  if (!credsDoc) await saveCreds();
+  return { state, saveCreds };
 }
 
 async function listMongoSessionIds() {
-    const collection = await getCollection();
-
-    const docs = await collection.find({
-        kind: 'creds',
-    }).toArray();
-
-    return docs
-        .filter((doc) => {
-            const creds = decode(doc.payload);
-            return !!creds?.me;
-        })
-        .map((doc) => doc.sessionId);
+  const coll = await collection();
+  const docs = await coll.find({ kind: 'creds' }, { projection: { sessionId: 1, value: 1 } }).toArray();
+  return docs.filter(doc => decode(doc.value)?.me).map(doc => doc.sessionId);
 }
 
 async function deleteMongoSession(sessionId) {
-    const collection = await getCollection();
-    await collection.deleteMany({ sessionId });
+  const coll = await collection();
+  await coll.deleteMany({ sessionId });
 }
 
-module.exports = {
-    useMongoAuthState,
-    listMongoSessionIds,
-    deleteMongoSession,
-};
+module.exports = { useMongoAuthState, listMongoSessionIds, deleteMongoSession };
