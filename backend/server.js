@@ -105,9 +105,10 @@ app.get('/api/auth/me', userAuth.requireUser, (req, res) => {
     res.json({ ok: true, user: userAuth.publicUser(req.user) });
 });
 
-app.get('/api/user/session', userAuth.requireUser, (req, res) => {
+app.get('/api/user/session', userAuth.requireUser, async (req, res) => {
     let sessionId = req.user.sessionId;
-    const paired = Boolean(sessionId && listSavedSessionIds().includes(sessionId));
+    const savedSessionIds = await listSavedSessionIds();
+    const paired = Boolean(sessionId && savedSessionIds.includes(sessionId));
     if (sessionId && !paired && !isConnected(sessionId)) {
         userAuth.clearSession(req.user.id, sessionId);
         sessionId = null;
@@ -457,7 +458,7 @@ app.get('/api/status/:requestId', userAuth.requireUser, (req, res) => {
 
 // Restore only website-created paired sessions.
 async function restoreSessions() {
-    const saved = listSavedSessionIds().filter((id) =>
+    const saved = (await listSavedSessionIds()).filter((id) =>
         /^web_[a-f0-9]{32}$/.test(id) && userAuth.findUserBySession(id)
     );
 
