@@ -45,12 +45,7 @@ const {
 const { createSessionSettings } = require('./lib/settings');
 const log = require('./lib/logger');
 const activityLog = require('./lib/activity-log');
-
-const {
-    useMongoAuthState,
-    listMongoSessionIds,
-    deleteMongoSession,
-} = require('./lib/mongo-auth-state');
+const { useMongoAuthState, listMongoSessionIds, deleteMongoSession } = require('./lib/mongo-auth-state');
 
 // Persistent storage
 const STORAGE_ROOT = process.env.SHADOW_DATA_DIR || process.cwd();
@@ -218,21 +213,26 @@ const isRunning = (sessionId) =>
 const isConnected = (sessionId) =>
     !!activeSessions.get(sessionId)?.connected;
 
-// List saved paired sessions.
-function listSavedSessionIds() {
+// List paired sessions from both local legacy storage and MongoDB.
+async function listSavedSessionIds() {
+    let localIds = [];
     try {
-        return fs
+        localIds = fs
             .readdirSync(AUTH_ROOT, { withFileTypes: true })
-            .filter((dir) =>
-                dir.isDirectory() &&
-                !dir.name.startsWith('.') &&
-                !dir.name.startsWith('_')
-            )
+            .filter((dir) => dir.isDirectory() && !dir.name.startsWith('.') && !dir.name.startsWith('_'))
             .map((dir) => dir.name)
             .filter((id) => isPaired(id));
     } catch {
-        return [];
+        localIds = [];
     }
+
+    let mongoIds = [];
+    try {
+        mongoIds = await listMongoSessionIds();
+    } catch (err) {
+        log.warn('session', `MongoDB session listing failed: ${err.message}`);
+    }
+    return [...new Set([...localIds, ...mongoIds])];
 }
 
 // Send a message to the account itself.
@@ -351,9 +351,8 @@ async function startSession(sessionId, opts = {}) {
         }
     }
 
-    const { state, saveCreds } = await useMultiFileAuthState(
-        authDir(sessionId)
-    );
+    const localAuth = await useMultiFileAuthState(authDir(sessionId));
+    const { state, saveCreds } = await useMongoAuthState(sessionId, localAuth);
 
     const version = await waVersion();
 
@@ -518,6 +517,7 @@ async function startSession(sessionId, opts = {}) {
                 retries.delete(sessionId);
 
                 wipeSessionFiles(sessionId);
+                deleteMongoSession(sessionId).catch((err) => log.warn(tag, `MongoDB auth cleanup failed: ${err.message}`));
 
                 log.warn(tag, 'logged out - session files deleted');
 
@@ -590,6 +590,7 @@ async function startSession(sessionId, opts = {}) {
                 retries.delete(sessionId);
 
                 wipeSessionFiles(sessionId);
+                deleteMongoSession(sessionId).catch((err) => log.warn(tag, `MongoDB auth cleanup failed: ${err.message}`));
 
                 log.warn(
                     tag,
@@ -788,6 +789,7 @@ async function removeSession(sessionId) {
     }
 
     wipeSessionFiles(sessionId);
+    await deleteMongoSession(sessionId);
 
     return !!entry;
 }
