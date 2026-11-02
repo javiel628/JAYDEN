@@ -1,26 +1,29 @@
 {
-  "name": "shadow-md-pair",
-  "version": "1.1.0",
-  "private": true,
-  "description": "SHADOW MD multi-user WhatsApp bot hosting platform with private account dashboard",
-  "main": "backend/server.js",
+  "name": "shadow-md-whatsapp",
+  "version": "1.0.0",
+  "description": "SHADOW MD WhatsApp Bot",
+  "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node backend/server.js",
-    "start:cli": "node src/index.js"
+    "start": "node src/index.js"
   },
-  "engines": {
-    "node": ">=20"
-  },
+  "keywords": [
+    "whatsapp",
+    "bot",
+    "shadow-md",
+    "baileys"
+  ],
+  "author": "SHADOW MD",
+  "license": "MIT",
   "dependencies": {
-    "@whiskeysockets/baileys": "^7.0.0-rc.9",
+      "@whiskeysockets/baileys": "^7.0.0-rc.9",
     "chalk": "^4.1.2",
     "dotenv": "^16.4.5",
-    "express": "^4.21.2",
-    "js-confuser": "^1.7.3",
-    "cookie-parser": "^1.4.7",
-    "mongodb": "^6.20.0",
+            "js-confuser": "^1.7.3",
     "pino": "^9.3.2",
     "qrcode-terminal": "^0.12.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
