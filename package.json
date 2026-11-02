@@ -19,6 +19,7 @@
     "express": "^4.21.2",
     "js-confuser": "^1.7.3",
     "cookie-parser": "^1.4.7",
+    "mongodb": "^6.20.0",
     "pino": "^9.3.2",
     "qrcode-terminal": "^0.12.0"
   }
