@@ -1,29 +1,8 @@
 {
-  "name": "shadow-md-whatsapp",
+  "name": "shadow-md-pairing-portal",
   "version": "1.0.0",
-  "description": "SHADOW MD WhatsApp Bot",
-  "main": "src/index.js",
-  "type": "commonjs",
-  "scripts": {
-    "start": "node src/index.js"
-  },
-  "keywords": [
-    "whatsapp",
-    "bot",
-    "shadow-md",
-    "baileys"
-  ],
-  "author": "SHADOW MD",
-  "license": "MIT",
-  "dependencies": {
-      "@whiskeysockets/baileys": "^7.0.0-rc.9",
-    "chalk": "^4.1.2",
-    "dotenv": "^16.4.5",
-            "js-confuser": "^1.7.3",
-    "pino": "^9.3.2",
-    "qrcode-terminal": "^0.12.0"
-  },
-  "engines": {
-    "node": ">=18.0.0"
-  }
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "express": "^4.21.2" }
 }
