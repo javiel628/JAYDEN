@@ -251,12 +251,12 @@ async function startSession(sessionId, opts = {}) {
             entry.connected = false;
             if (entry.stopping) return;
 
-            // WhatsApp can revoke a linked device externally. Preserve the on-disk auth
-            // files for diagnosis/recovery; do not silently erase the user's session.
-            // A server-side loggedOut status still requires manual re-pairing.
+            // 1) logged out (unlinked from the phone, or session revoked): delete everything NOW
             if (statusCode === DisconnectReason.loggedOut) {
+                entry.wiped = true;
                 retries.delete(sessionId);
-                log.warn(tag, 'WhatsApp reports logged out/revoked. Session files were PRESERVED; manual re-pair may be required.');
+                wipeSessionFiles(sessionId);
+                log.warn(tag, 'logged out - session files deleted');
                 fire(tag, onLoggedOut);
                 return;
             }
@@ -281,11 +281,12 @@ async function startSession(sessionId, opts = {}) {
                 return;
             }
 
-            // If pairing never completed, keep any partial auth state for inspection.
-            // Pairing failures should not trigger automatic deletion of session files.
+            // 2) closed before the number was ever linked (code expired / never entered): drop the leftovers
             if (!sock.authState.creds.me && !restartRequired) {
+                entry.wiped = true;
                 retries.delete(sessionId);
-                log.warn(tag, `pairing did not complete (code ${statusCode}) - session files preserved`);
+                wipeSessionFiles(sessionId);
+                log.warn(tag, `pairing did not complete (code ${statusCode}) - session files deleted`);
                 fire(tag, onPairingFailed, statusCode);
                 return;
             }
