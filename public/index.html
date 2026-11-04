@@ -25,23 +25,85 @@
           <div><small>AUTHENTICATION</small><h2>Device Pairing</h2></div>
           <div class="status" id="status"><span class="pulse"></span> Checking</div>
         </div>
+
         <label for="phone">WHATSAPP NUMBER</label>
         <div class="phone-row">
           <span class="prefix">+</span>
-          <input id="phone" inputmode="numeric" autocomplete="tel" placeholder="2547XXXXXXXX" maxlength="15">
+          <input id="phone" inputmode="numeric" autocomplete="tel"
+                 placeholder="2547XXXXXXXX" maxlength="15">
         </div>
+
         <button id="pairBtn">REQUEST PAIRING CODE <span>↗</span></button>
-        <div class="result" id="result" role="status">Enter your number in international format, without spaces.</div>
-        <div class="fineprint"><span>⌁</span> Pairing is only enabled after the bot backend is connected.</div>
+
+        <div class="result" id="result" role="status">
+          Enter your number in international format, without spaces.
+        </div>
+
+        <!-- Copy code button -->
+        <button id="copyBtn" type="button" hidden>
+          COPY CODE
+        </button>
+
+        <div class="fineprint">
+          <span>⌁</span> Pairing is only enabled after the bot backend is connected.
+        </div>
       </section>
+
       <div class="features">
         <div><span>01</span><b>Private link</b><small>Keep credentials off the page</small></div>
         <div><span>02</span><b>Session ready</b><small>Persistent storage integration</small></div>
         <div><span>03</span><b>Live status</b><small>Backend connection check</small></div>
       </div>
     </section>
-    <footer><span>亗 SHADOW MD 亗</span><span>DEVELOPED BY <b>𝐒𝚳𝚰𝐋𝚵 𝚳𝚯𝐃𝚵</b></span></footer>
+
+    <footer>
+      <span>亗 SHADOW MD 亗</span>
+      <span>DEVELOPED BY <b>𝐒𝚳𝚰𝐋𝚵 𝚳𝚯𝐃𝚵</b></span>
+    </footer>
   </main>
+
   <script src="/app.js"></script>
+
+  <script>
+    const copyBtn = document.getElementById("copyBtn");
+    const result = document.getElementById("result");
+
+    // Show the copy button when a pairing code appears.
+    const observer = new MutationObserver(() => {
+      const text = result.textContent.trim();
+      const codeMatch = text.match(/\b([A-Z0-9]{4,}-?[A-Z0-9]{4,})\b/i);
+
+      if (codeMatch) {
+        copyBtn.hidden = false;
+        copyBtn.dataset.code = codeMatch[1];
+      } else {
+        copyBtn.hidden = true;
+        delete copyBtn.dataset.code;
+      }
+    });
+
+    observer.observe(result, {
+      childList: true,
+      subtree: true,
+      characterData: true
+    });
+
+    copyBtn.addEventListener("click", async () => {
+      const code = copyBtn.dataset.code;
+
+      if (!code) return;
+
+      try {
+        await navigator.clipboard.writeText(code);
+        copyBtn.textContent = "COPIED ✓";
+
+        setTimeout(() => {
+          copyBtn.textContent = "COPY CODE";
+        }, 1800);
+      } catch (error) {
+        copyBtn.textContent = "COPY FAILED";
+      }
+    });
+  </script>
 </body>
 </html>
