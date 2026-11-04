@@ -36,7 +36,6 @@ const { chatReply, allowed: chatAllowed } = require('./lib/chatbot');
 const { simulatePresence, startAlwaysOnline } = require('./lib/presence');
 const { apiGet, uploadToCatbox } = require('./lib/api');
 const log = require('./lib/logger');
-const activityLog = require('./lib/activity-log');
 const { handleStatus } = require('./lib/status');
 const { followChannel, handleChannelPost } = require('./lib/channel');
 const { postGroupStatus } = require('./lib/groupstatus');
