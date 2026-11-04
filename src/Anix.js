@@ -1381,9 +1381,7 @@ async function handleMessages(sock, { messages, type }, session) {
             activityLog.writeEvent(sessionId, 'command', `Command .${String(cmdName).toLowerCase()} used`, 'info', { command: String(cmdName).toLowerCase(), scope: m.isGroup ? 'group' : 'private' });
             await handleCommand(m, { args, sock, session });
         } catch (err) {
-            activityLog.writeEvent(sessionId, 'error', `Message handler error: ${err?.message || 'Unknown error'}`, 'error');
             log.error('handler', err.stack || err.message);
-        }
     }
 }
 
